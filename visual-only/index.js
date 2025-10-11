@@ -14,6 +14,9 @@ const BackendAdapter = (() => {
 
   async function loadConfig() {
     try {
+      if (typeof location !== 'undefined' && location.protocol === 'file:') {
+        return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
+      }
       const resp = await fetch('/api/config', { headers: { Accept: 'application/json' } });
       if (resp && resp.ok) {
         const cfg = await resp.json().catch(() => ({}));
