@@ -9,7 +9,19 @@ const BackendAdapter = (() => {
   }
 
   async function loadConfig() {
-    return { enabled: false, apiBaseUrl: state.apiBaseUrl };
+    try {
+      const resp = await fetch('/api/config', { headers: { Accept: 'application/json' } });
+      if (resp && resp.ok) {
+        const cfg = await resp.json().catch(() => ({}));
+        if (cfg && typeof cfg.apiBaseUrl === 'string' && cfg.apiBaseUrl.trim()) {
+          state.apiBaseUrl = cfg.apiBaseUrl;
+        }
+        if (cfg && typeof cfg.FEATURE_USE_BACKEND === 'boolean') {
+          window.FEATURE_USE_BACKEND = cfg.FEATURE_USE_BACKEND;
+        }
+      }
+    } catch {}
+    return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
   }
 
   function headers() {
