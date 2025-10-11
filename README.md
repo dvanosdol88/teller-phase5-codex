@@ -1,3 +1,11 @@
+# Teller Cached Dashboard (Visual Only)
+
+This repo contains a static, visual-only snapshot of the Teller cached dashboard UI.
+
+Docs
+- See docs/INTEGRATION_PLAN.md for the complete, detailed phased integration plan, task checklists, rollout, and verification steps.
+
+
 # Teller Cached Dashboard — Visual-Only Snapshot
 
 This repository contains an unserved, add-only snapshot of the Teller Cached Dashboard UI under `visual-only/`, with:
