@@ -1,3 +1,7 @@
+window.FEATURE_USE_BACKEND = false;
+window.TEST_BEARER_TOKEN = undefined;
+
+
 const BackendAdapter = (() => {
   const state = {
     apiBaseUrl: "/api",
@@ -203,4 +207,10 @@ function init() {
   MOCK_ACCOUNTS.forEach(acc => grid.appendChild(renderCard(acc)));
 }
 
-document.addEventListener('DOMContentLoaded', init);
+async function boot() {
+  try {
+    await BackendAdapter.loadConfig();
+  } catch {}
+  document.addEventListener('DOMContentLoaded', init);
+}
+boot();
