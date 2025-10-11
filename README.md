@@ -74,7 +74,24 @@ Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'
 
 Verification checklist (unchanged in spirit):
 - Open `visual-only/index.html` via `file://` or a static server.
-- Cards render; flip works; “Refresh” shows a toast only.
+- Cards render; flip works; "Refresh" shows a toast only.
 - DevTools Network: no requests.
 - Application > Storage: no localStorage writes.
 - Console: no errors.
+
+## Integration Status
+
+**Phases 1-4**: Complete ✓
+- Phase 1: Feature-flagged BackendAdapter implemented
+- Phase 2: Runtime config loader via /api/config
+- Phase 3: Token handling with TEST_BEARER_TOKEN
+- Phase 4: Cached reads wired into rendering with safe fallbacks
+
+**Phase 5**: Ready to begin (backend configuration)
+- Requires backend changes to add FEATURE_USE_BACKEND to /api/config
+- See `docs/INTEGRATION_PLAN.md` for detailed requirements
+
+**Testing the integration**:
+1. With `FEATURE_USE_BACKEND=false` (default): UI works purely with mock data
+2. With `FEATURE_USE_BACKEND=true` and backend reachable: UI fetches from /api/db/* endpoints
+3. With backend unavailable: UI gracefully falls back to mocks
