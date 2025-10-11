@@ -1,3 +1,7 @@
+window.FEATURE_USE_BACKEND = false;
+window.TEST_BEARER_TOKEN = undefined;
+
+
 const BackendAdapter = (() => {
   const state = {
     apiBaseUrl: "/api",
@@ -10,6 +14,9 @@ const BackendAdapter = (() => {
 
   async function loadConfig() {
     try {
+      if (typeof location !== 'undefined' && location.protocol === 'file:') {
+        return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
+      }
       const resp = await fetch('/api/config', { headers: { Accept: 'application/json' } });
       if (resp && resp.ok) {
         const cfg = await resp.json().catch(() => ({}));
@@ -203,4 +210,10 @@ function init() {
   MOCK_ACCOUNTS.forEach(acc => grid.appendChild(renderCard(acc)));
 }
 
-document.addEventListener('DOMContentLoaded', init);
+async function boot() {
+  try {
+    await BackendAdapter.loadConfig();
+  } catch {}
+  document.addEventListener('DOMContentLoaded', init);
+}
+boot();

@@ -51,3 +51,22 @@ Verification checklist:
 Requested by: David Van Osdol (@dvanosdol88)
 
 Link to Devin run: https://app.devin.ai/sessions/0e152bd725c046c2b1412334ca69c5ca
+## Phase 3 – Security headers and CSP (UI)
+
+This static snapshot is now CSP-friendly:
+- Removed inline script from `visual-only/index.html`.
+- Asset paths are relative for portability and same-origin serving.
+- Safe defaults live in `visual-only/index.js`; when served behind a backend, `BackendAdapter.loadConfig()` can read `/api/config` after load.
+
+Recommended backend headers (see the backend hardening plan in the main repo):
+- HSTS, X-Frame-Options or frame-ancestors, and a strict Content-Security-Policy header.
+
+Example strict CSP header for local testing:
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'
+
+Verification checklist (unchanged in spirit):
+- Open `visual-only/index.html` via `file://` or a static server.
+- Cards render; flip works; “Refresh” shows a toast only.
+- DevTools Network: no requests.
+- Application > Storage: no localStorage writes.
+- Console: no errors.
