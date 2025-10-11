@@ -91,7 +91,19 @@ Verification checklist (unchanged in spirit):
 - Requires backend changes to add FEATURE_USE_BACKEND to /api/config
 - See `docs/INTEGRATION_PLAN.md` for detailed requirements
 
+**Phase 6**: Complete ✓
+- Validation procedures documented
+- Rollback path confirmed
+- Troubleshooting guide available
+
 **Testing the integration**:
 1. With `FEATURE_USE_BACKEND=false` (default): UI works purely with mock data
 2. With `FEATURE_USE_BACKEND=true` and backend reachable: UI fetches from /api/db/* endpoints
 3. With backend unavailable: UI gracefully falls back to mocks
+
+## Validation & Troubleshooting
+
+- **Validation**: See [docs/VALIDATION.md](docs/VALIDATION.md) for step-by-step validation procedures covering all integration scenarios
+- **Troubleshooting**: See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues, solutions, and debugging tips
+
+**Quick Rollback**: To instantly disable backend integration, set `FEATURE_USE_BACKEND=false` in the `/api/config` endpoint response. The UI will revert to purely static behavior without redeployment. See [docs/VALIDATION.md](docs/VALIDATION.md#rollback-verification) for rollback verification steps.

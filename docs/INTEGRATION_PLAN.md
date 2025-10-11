@@ -16,7 +16,8 @@ Status Summary
 - Phase 2 (Runtime config loader): Merged (#4)
 - Phase 3 (Token handling strategy): Merged (#6 - included in Phase 4 PR)
 - Phase 4 (Progressive rollout of cached reads): Merged (#7)
-- Next: Phase 5 (Backend configuration on Render)
+- Phase 5 (Backend configuration on Render): Ready to begin
+- Phase 6 (Monitoring, Validation, Rollback): Complete
 
 Global Flags and Conventions
 - window.FEATURE_USE_BACKEND: boolean. Default false; gates all backend usage.
@@ -174,9 +175,9 @@ Phase 5 Checklist
 - [ ] Validate flipping FEATURE_USE_BACKEND toggles data source
 
 Phase 6 Checklist
-- [ ] Create validation script/steps
-- [ ] Confirm instant rollback path
-- [ ] Add troubleshooting to README
+- [x] Create validation script/steps
+- [x] Confirm instant rollback path
+- [x] Add troubleshooting to README
 
 PR Scaffolds
 
