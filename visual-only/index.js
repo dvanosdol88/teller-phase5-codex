@@ -146,7 +146,7 @@ function formatTimestamp(ts) {
   }
 }
 
-function renderCard(account) {
+async function renderCard(account) {
   const template = document.getElementById('account-card-template');
   const node = template.content.firstElementChild.cloneNode(true);
   node.dataset.accountId = account.id;
@@ -159,14 +159,14 @@ function renderCard(account) {
   const subtitle = [account.institution, account.last_four ? `•••• ${account.last_four}` : null].filter(Boolean).join(' · ');
   node.querySelectorAll('.account-subtitle').forEach(el => el.textContent = subtitle);
 
-  const bal = MOCK_BALANCES[account.id] || {};
+  const bal = await BackendAdapter.fetchCachedBalance(account.id);
   node.querySelector('.balance-available').textContent = formatCurrency(bal.available, account.currency);
   node.querySelector('.balance-ledger').textContent = formatCurrency(bal.ledger, account.currency);
   node.querySelector('.balance-cached').textContent = `Cached: ${formatTimestamp(bal.cached_at)}`;
 
   const list = node.querySelector('.transactions-list');
   list.innerHTML = '';
-  const txs = (MOCK_TRANSACTIONS[account.id] || []);
+  const txs = await BackendAdapter.fetchCachedTransactions(account.id, 10);
   if (!txs.length) {
     node.querySelector('.transactions-empty').classList.remove('hidden');
   } else {
@@ -197,23 +197,31 @@ function renderCard(account) {
   return node;
 }
 
-function init() {
+async function init() {
   const grid = document.getElementById('accounts-grid');
   const empty = document.getElementById('empty-state');
   grid.innerHTML = '';
 
-  if (!MOCK_ACCOUNTS.length) {
+  const accounts = await BackendAdapter.fetchAccounts();
+  if (!accounts.length) {
     empty.classList.remove('hidden');
     return;
   }
   empty.classList.add('hidden');
-  MOCK_ACCOUNTS.forEach(acc => grid.appendChild(renderCard(acc)));
+  for (const acc of accounts) {
+    const card = await renderCard(acc);
+    grid.appendChild(card);
+  }
 }
 
 async function boot() {
   try {
     await BackendAdapter.loadConfig();
   } catch {}
-  document.addEventListener('DOMContentLoaded', init);
+  if (document.readyState !== 'loading') {
+    init();
+  } else {
+    document.addEventListener('DOMContentLoaded', init);
+  }
 }
 boot();
