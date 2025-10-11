@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Teller Cached Dashboard (Visual Only)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="page-header">
+    <div class="header-inner">
+      <div class="brand">
+        <img src="../static/teller.svg" alt="Teller" width="24" height="24" />
+        <h1>Teller Cached Dashboard</h1>
+      </div>
+      <div class="actions">
+        <button id="connect-btn" class="btn" disabled>Connect account</button>
+        <button id="disconnect-btn" class="btn btn-secondary" disabled>Disconnect</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="status-bar">
+    <div class="status-item">
+      <div class="label">Environment</div>
+      <div class="value" id="env-value">development</div>
+    </div>
+    <div class="status-item">
+      <div class="label">User</div>
+      <div class="value" id="user-value">—</div>
+    </div>
+    <div class="status-item token">
+      <div class="label">Access token</div>
+      <div class="value" id="token-value">—</div>
+    </div>
+  </section>
+
+  <main class="page-main">
+    <section class="accounts">
+      <div class="accounts-header">
+        <h2>Accounts</h2>
+        <div class="actions">
+          <button id="refresh-all" class="btn btn-secondary">Refresh all</button>
+        </div>
+      </div>
+
+      <div id="empty-state" class="empty-state hidden">
+        <div class="empty-icon">💳</div>
+        <div class="empty-title">No accounts connected</div>
+        <div class="empty-subtitle">Use “Connect account” to link your bank and view cached data.</div>
+      </div>
+
+      <div id="accounts-grid" class="cards-grid"></div>
+    </section>
+  </main>
+
+  <template id="account-card-template">
+    <article class="card" data-account-id="">
+      <div class="card-inner">
+        <div class="card-face card-face-front">
+          <div class="card-header">
+            <div>
+              <div class="account-name">Account</div>
+              <div class="account-subtitle"></div>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-icon flip-btn" title="Flip">↺</button>
+            </div>
+          </div>
+          <div class="balances">
+            <div class="balance">
+              <div class="label">Available</div>
+              <div class="value balance-available">$0.00</div>
+            </div>
+            <div class="balance">
+              <div class="label">Ledger</div>
+              <div class="value balance-ledger">$0.00</div>
+            </div>
+            <div class="meta">
+              <span class="balance-cached">—</span>
+            </div>
+          </div>
+          <div class="card-footer">
+            <button class="btn refresh-btn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="card-face card-face-back">
+          <div class="card-header">
+            <div>
+              <div class="account-name">Account</div>
+              <div class="account-subtitle"></div>
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-icon flip-btn" title="Flip">↺</button>
+            </div>
+          </div>
+          <div class="transactions">
+            <ul class="transactions-list"></ul>
+            <div class="transactions-empty">No cached transactions</div>
+          </div>
+          <div class="card-footer">
+            <span class="transactions-cached">—</span>
+          </div>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="./index.js" type="module"></script>
+</body>
+</html>
