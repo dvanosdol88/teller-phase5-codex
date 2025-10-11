@@ -14,7 +14,9 @@ Status Summary
 - Phase 1 (Adapter + Flags): Merged (#2)
 - Hotfix (Robust asset paths): Merged (#3)
 - Phase 2 (Runtime config loader): Merged (#4)
-- Next: Phase 3 (Token handling strategy) then Phase 4 (Progressive rollout of cached reads)
+- Phase 3 (Token handling strategy): Merged (#6 - included in Phase 4 PR)
+- Phase 4 (Progressive rollout of cached reads): Merged (#7)
+- Next: Phase 5 (Backend configuration on Render)
 
 Global Flags and Conventions
 - window.FEATURE_USE_BACKEND: boolean. Default false; gates all backend usage.
@@ -126,19 +128,48 @@ Phase 2 Checklist
 - [x] Verify 200/404/500 cases produce no console errors
 
 Phase 3 Checklist
-- [ ] Use window.TEST_BEARER_TOKEN if present
-- [ ] No persistence; headers added only when token present
-- [ ] Document test usage in README
-- [ ] Verify unauthorized calls silently fall back to mocks
+- [x] Use window.TEST_BEARER_TOKEN if present
+- [x] No persistence; headers added only when token present
+- [x] Document test usage in README
+- [x] Verify unauthorized calls silently fall back to mocks
 
 Phase 4 Checklist
-- [ ] Gate cached fetches via isBackendEnabled()
-- [ ] Wire rendering to adapter with silent fallback
-- [ ] Optional: toast “Using demo data” on fallback
-- [ ] Verify backend down/up scenarios
+- [x] Gate cached fetches via isBackendEnabled()
+- [x] Wire rendering to adapter with silent fallback
+- [x] Optional: toast "Using demo data" on fallback
+- [x] Verify backend down/up scenarios
+
+Phase 5 Notes
+
+**UI Side Status**: Complete. All necessary code changes for Phases 1-4 are implemented and merged.
+
+**Backend Side Requirements** (teller-codex10-9 repo):
+The backend /api/config endpoint currently returns:
+- `applicationId`: string
+- `environment`: string  
+- `apiBaseUrl`: string
+
+Phase 5 requires adding:
+- `FEATURE_USE_BACKEND`: boolean (to allow runtime toggling of the feature)
+
+This should be:
+1. Added to the runtime_config dict in python/teller.py (around line 213)
+2. Sourced from environment variable (e.g., FEATURE_USE_BACKEND)
+3. Default to false for safety
+
+**Render Environment Variables** needed:
+- `TELLER_APPLICATION_ID`: Teller application identifier
+- `TELLER_ENVIRONMENT`: development/production
+- `TELLER_APP_API_BASE_URL`: defaults to /api
+- `TELLER_CERTIFICATE` or `TELLER_CERTIFICATE_B64`: TLS certificate
+- `TELLER_PRIVATE_KEY` or `TELLER_PRIVATE_KEY_B64`: TLS private key
+- `DATABASE_INTERNAL_URL`: Postgres connection string
+- `DATABASE_SSLMODE`: SSL mode for Postgres
+- `FEATURE_USE_BACKEND`: boolean to enable/disable backend integration (NEW)
 
 Phase 5 Checklist
-- [ ] Ensure backend /api/config returns expected fields
+- [ ] Add FEATURE_USE_BACKEND to backend /api/config response
+- [ ] Ensure backend /api/config returns all expected fields
 - [ ] Confirm Render env vars and DB config set
 - [ ] Validate flipping FEATURE_USE_BACKEND toggles data source
 
