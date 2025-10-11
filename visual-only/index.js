@@ -1,3 +1,81 @@
+const BackendAdapter = (() => {
+  const state = {
+    apiBaseUrl: "/api",
+    bearerToken: undefined,
+  };
+
+  function isBackendEnabled() {
+    return Boolean(window.FEATURE_USE_BACKEND);
+  }
+
+  async function loadConfig() {
+    return { enabled: false, apiBaseUrl: state.apiBaseUrl };
+  }
+
+  function headers() {
+    const h = { "Accept": "application/json" };
+    const token = window.TEST_BEARER_TOKEN || state.bearerToken;
+    if (token) h["Authorization"] = `Bearer ${token}`;
+    return h;
+  }
+
+  async function fetchAccounts() {
+    if (!isBackendEnabled()) return MOCK_ACCOUNTS;
+    try {
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts`, { headers: headers() });
+      if (!resp.ok) throw new Error("accounts failed");
+      const data = await resp.json();
+      return (data.accounts || []).map(a => ({
+        id: a.id, name: a.name, institution: a.institution, last_four: a.last_four, currency: a.currency
+      }));
+    } catch {
+      return MOCK_ACCOUNTS;
+    }
+  }
+
+  async function fetchCachedBalance(accountId) {
+    if (!isBackendEnabled()) return MOCK_BALANCES[accountId];
+    try {
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/balances`, { headers: headers() });
+      if (!resp.ok) throw new Error("balance failed");
+      const data = await resp.json();
+      return { ...data.balance, cached_at: data.cached_at };
+    } catch {
+      return MOCK_BALANCES[accountId];
+    }
+  }
+
+  async function fetchCachedTransactions(accountId, limit = 10) {
+    if (!isBackendEnabled()) return (MOCK_TRANSACTIONS[accountId] || []);
+    try {
+      const url = `${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/transactions?limit=${limit}`;
+      const resp = await fetch(url, { headers: headers() });
+      if (!resp.ok) throw new Error("transactions failed");
+      const data = await resp.json();
+      return data.transactions || [];
+    } catch {
+      return (MOCK_TRANSACTIONS[accountId] || []);
+    }
+  }
+
+  async function refreshLive(accountId, count = 10) {
+    if (!isBackendEnabled()) return { balance: MOCK_BALANCES[accountId], transactions: (MOCK_TRANSACTIONS[accountId] || []) };
+    try {
+      const [bResp, tResp] = await Promise.all([
+        fetch(`${state.apiBaseUrl}/accounts/${encodeURIComponent(accountId)}/balances`, { headers: headers() }),
+        fetch(`${state.apiBaseUrl}/accounts/${encodeURIComponent(accountId)}/transactions?count=${count}`, { headers: headers() }),
+      ]);
+      if (!bResp.ok || !tResp.ok) throw new Error("live refresh failed");
+      const balance = await bResp.json();
+      const txsData = await tResp.json();
+      return { balance, transactions: txsData.transactions || [] };
+    } catch {
+      return { balance: MOCK_BALANCES[accountId], transactions: (MOCK_TRANSACTIONS[accountId] || []) };
+    }
+  }
+
+  return { loadConfig, isBackendEnabled, fetchAccounts, fetchCachedBalance, fetchCachedTransactions, refreshLive };
+})();
 const MOCK_ACCOUNTS = [
   { id: 'acc_checking', name: 'Checking', institution: 'Demo Bank', last_four: '1234', currency: 'USD' },
   { id: 'acc_savings', name: 'Savings', institution: 'Demo Bank', last_four: '9876', currency: 'USD' }
