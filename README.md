@@ -3,7 +3,10 @@
 This repo contains a static, visual-only snapshot of the Teller cached dashboard UI.
 
 Docs
-- See docs/INTEGRATION_PLAN.md for the complete, detailed phased integration plan, task checklists, rollout, and verification steps.
+- Integration: docs/INTEGRATION.md
+- Validation: docs/VALIDATION.md
+- Troubleshooting: docs/TROUBLESHOOTING.md
+- Deployment options: docs/DEPLOYMENT_CHOICES.md
 
 
 # Teller Cached Dashboard — Visual-Only Snapshot
@@ -88,8 +91,8 @@ Verification checklist (unchanged in spirit):
 - Phase 4: Cached reads wired into rendering with safe fallbacks
 
 **Phase 5**: Ready to begin (backend configuration)
-- Requires backend changes to add FEATURE_USE_BACKEND to /api/config
-- See `docs/INTEGRATION_PLAN.md` for detailed requirements
+- Backend may optionally add FEATURE_USE_BACKEND to /api/config for runtime toggling
+- See docs/INTEGRATION.md for details
 
 **Phase 6**: Complete ✓
 - Validation procedures documented

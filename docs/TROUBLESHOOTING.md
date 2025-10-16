@@ -585,7 +585,7 @@ Use `<report_environment_issue>` for:
 ## Related Documentation
 
 - [Validation Procedures](./VALIDATION.md) - How to verify everything works
-- [Integration Plan](./INTEGRATION_PLAN.md) - Full integration details
+- [Integration Guide](./INTEGRATION.md) - Full integration details
 - [README](../README.md) - Project overview and setup
 
 ---
