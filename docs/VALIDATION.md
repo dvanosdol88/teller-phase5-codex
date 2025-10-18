@@ -127,6 +127,31 @@ Key DevTools panels:
 
 **Expected Result**: Backend requests are attempted but fail gracefully. UI falls back to mock data without errors or broken states.
 
+## Rollout Preflight & Rollback Drill
+
+**Purpose**: Give operators a scripted rehearsal before flipping the runtime flag so they know the happy path _and_ the escape hatch.
+
+**Preflight Checks (run before enabling FEATURE_USE_BACKEND):**
+
+- [ ] **Fetch /api/config directly**
+  - Run: `curl -sS -D- https://<ui-host>/api/config`
+  - Verify HTTP 200 status
+  - Verify response JSON includes a non-empty string `apiBaseUrl`
+  - Verify `FEATURE_USE_BACKEND` is present and boolean (or plan to rely on UI default)
+  - If any check fails, halt rollout and investigate backend health/config
+
+- [ ] **Backend readiness confirmation**
+  - Confirm `/api/db/accounts` responds with HTTP 200 (smoke test; no payload validation needed yet)
+  - Confirm on-call or release lead acknowledges fallback plan
+
+**Rollback Drill (rehearse before toggling flag to true):**
+
+- [ ] **Force FEATURE_USE_BACKEND=false** via backend config or admin tooling
+- [ ] Reload UI and execute Scenario 1 checklist to confirm mock-only mode still works
+- [ ] Document the exact command/process to revert so it can be repeated during incident response
+
+Only after the preflight and rollback boxes are checked should the flag be enabled in production. Capture the results in release notes for traceability.
+
 ## Scenario 3: Backend Enabled and Reachable
 
 **Purpose**: Verify integration with live backend returns cached data correctly.
