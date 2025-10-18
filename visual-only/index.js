@@ -2,6 +2,9 @@ window.FEATURE_USE_BACKEND = false;
 window.TEST_BEARER_TOKEN = undefined;
 window.FEATURE_MANUAL_DATA = false;
 window.__manualDataBound = false;
+
+const accountRegistry = new Map();
+const manualDataCache = new Map();
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
 console.log('[UI] build:', new Date().toISOString());
 
@@ -160,19 +163,66 @@ const BackendAdapter = (() => {
     }
   }
 
-  async function fetchManualData(accountId) {
-    if (!isBackendEnabled()) return MOCK_MANUAL_DATA[accountId] || { account_id: accountId, rent_roll: null, updated_at: null };
+  async function fetchManualData(accountId, { signal } = {}) {
+    if (!isBackendEnabled()) {
+      const mock = MOCK_MANUAL_DATA[accountId] || { account_id: accountId, rent_roll: null, updated_at: null };
+      updateManualDataCache(accountId, mock);
+      return mock;
+    }
     try {
-      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, { headers: headers() });
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, {
+        headers: headers(),
+        signal
+      });
       if (!resp.ok) {
         recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, new Error(`manual data request failed with status ${resp.status}`));
-        return { account_id: accountId, rent_roll: null, updated_at: null };
+        const fallback = { account_id: accountId, rent_roll: null, updated_at: null };
+        updateManualDataCache(accountId, fallback);
+        return fallback;
       }
-      return await resp.json();
+      const data = await resp.json();
+      updateManualDataCache(accountId, data);
+      return data;
     } catch (err) {
       recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, err);
-      return { account_id: accountId, rent_roll: null, updated_at: null };
+      const fallback = { account_id: accountId, rent_roll: null, updated_at: null };
+      updateManualDataCache(accountId, fallback);
+      return fallback;
     }
+  }
+
+  async function updateManualData(accountId, body, { signal } = {}) {
+    if (!isBackendEnabled()) {
+      throw Object.assign(new Error('Backend not enabled'), { code: 'BACKEND_DISABLED' });
+    }
+    const payload = { rent_roll: body?.rent_roll ?? null };
+    const requestInit = {
+      method: 'PUT',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal
+    };
+
+    const endpoint = `${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`;
+    const resp = await fetch(endpoint, requestInit);
+    const requestId = resp.headers?.get?.('x-request-id') || resp.headers?.get?.('X-Request-Id') || null;
+    if (!resp.ok) {
+      let detail;
+      try {
+        detail = await resp.json();
+      } catch (_) {
+        detail = undefined;
+      }
+      const error = new Error(detail?.message || `Failed to update manual data (status ${resp.status})`);
+      error.status = resp.status;
+      error.requestId = requestId;
+      error.body = detail;
+      throw error;
+    }
+
+    const data = await resp.json();
+    updateManualDataCache(accountId, data);
+    return { data, requestId };
   }
 
   return {
@@ -182,6 +232,7 @@ const BackendAdapter = (() => {
     fetchAccounts,
     fetchCachedBalance,
     fetchManualData,
+    updateManualData,
     getDiagnostics,
     clearDiagnostics
   };
@@ -210,6 +261,30 @@ const MOCK_MANUAL_DATA = {
   acc_llc_savings: { account_id: 'acc_llc_savings', rent_roll: null, updated_at: null }
 };
 
+function getManualDataFromCache(accountId) {
+  if (!accountId) return undefined;
+  return manualDataCache.get(accountId);
+}
+
+function updateManualDataCache(accountId, data, currency) {
+  if (!accountId) return;
+  if (!data) {
+    manualDataCache.delete(accountId);
+    return;
+  }
+  const normalized = {
+    account_id: data.account_id || accountId,
+    rent_roll: data.rent_roll != null && !Number.isNaN(Number(data.rent_roll)) ? Number(data.rent_roll) : null,
+    updated_at: data.updated_at || null,
+    currency: data.currency || currency || (manualDataCache.get(accountId)?.currency) || 'USD'
+  };
+  manualDataCache.set(accountId, normalized);
+}
+
+function clearManualDataCache() {
+  manualDataCache.clear();
+}
+
 function showToast(message) {
   const el = document.getElementById('toast');
   if (!el) return;
@@ -218,6 +293,615 @@ function showToast(message) {
   window.clearTimeout(showToast._t);
   showToast._t = window.setTimeout(() => el.classList.add('hidden'), 2200);
 }
+
+function formatRelativeTime(input) {
+  if (!input) return '—';
+  const date = new Date(input);
+  if (Number.isNaN(date.getTime())) return '—';
+  const diffMs = Date.now() - date.getTime();
+  const diffSec = Math.round(diffMs / 1000);
+  if (diffSec < 10) return 'just now';
+  if (diffSec < 60) return `${diffSec} seconds ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return diffMin === 1 ? '1 minute ago' : `${diffMin} minutes ago`;
+  const diffHours = Math.round(diffMin / 60);
+  if (diffHours < 24) return diffHours === 1 ? '1 hour ago' : `${diffHours} hours ago`;
+  const diffDays = Math.round(diffHours / 24);
+  if (diffDays < 7) return diffDays === 1 ? '1 day ago' : `${diffDays} days ago`;
+  return date.toLocaleString();
+}
+
+function updateRentRollSummaryDisplay() {
+  const rentRollValueEl = document.getElementById('rent-roll-total');
+  if (!rentRollValueEl) return;
+  let total = 0;
+  let currency = 'USD';
+  manualDataCache.forEach((entry) => {
+    if (!entry) return;
+    if (entry.currency) currency = entry.currency;
+    if (entry.rent_roll != null && !Number.isNaN(Number(entry.rent_roll))) {
+      total += Number(entry.rent_roll);
+    }
+  });
+  rentRollValueEl.textContent = formatCurrency(total, currency);
+}
+
+const ManualDataUI = (() => {
+  const state = {
+    bound: false,
+    accountModal: null,
+    accountModalContent: null,
+    accountModalOverlay: null,
+    accountModalClose: null,
+    accountModalTitle: null,
+    accountModalSubtitle: null,
+    accountModalTabs: null,
+    accountModalTabContent: null,
+    manualModal: null,
+    manualModalContent: null,
+    manualModalOverlay: null,
+    manualModalClose: null,
+    manualModalCancel: null,
+    manualModalClear: null,
+    manualModalSave: null,
+    manualModalInput: null,
+    manualModalError: null,
+    manualModalSaving: false,
+    manualModalEnterLock: false,
+    activeAccount: null,
+    activeTab: 'manual',
+    loadController: null,
+    saveController: null,
+    tabButtons: {},
+    manualDataEditButton: null,
+  };
+
+  function bind() {
+    if (state.bound) return;
+    cacheElements();
+    if (!state.accountModal || !state.manualModal) {
+      throw new Error('Manual data modals not found in DOM');
+    }
+    setupAccountModal();
+    setupManualModal();
+    attachAccountCardDelegates();
+    state.bound = true;
+  }
+
+  function cacheElements() {
+    state.accountModal = document.getElementById('account-modal');
+    state.accountModalContent = state.accountModal?.querySelector('.modal-content');
+    state.accountModalOverlay = state.accountModal?.querySelector('.modal-bg');
+    state.accountModalClose = document.getElementById('close-modal-btn');
+    state.accountModalTitle = document.getElementById('modal-title');
+    state.accountModalSubtitle = document.getElementById('modal-subtitle');
+    state.accountModalTabs = document.getElementById('modal-tabs');
+    state.accountModalTabContent = document.getElementById('modal-tab-content');
+
+    state.manualModal = document.getElementById('manual-data-modal');
+    state.manualModalContent = state.manualModal?.querySelector('.modal-content');
+    state.manualModalOverlay = state.manualModal?.querySelector('.modal-bg');
+    state.manualModalClose = state.manualModal?.querySelector('.modal-close');
+    state.manualModalCancel = state.manualModal?.querySelector('.modal-cancel');
+    state.manualModalClear = state.manualModal?.querySelector('.modal-clear');
+    state.manualModalSave = state.manualModal?.querySelector('.modal-save');
+    state.manualModalInput = document.getElementById('rent-roll-input');
+
+    if (state.manualModalInput && !state.manualModalError) {
+      state.manualModalError = document.createElement('p');
+      state.manualModalError.className = 'text-sm text-rose-600 mt-2 hidden';
+      state.manualModalInput.insertAdjacentElement('afterend', state.manualModalError);
+    }
+  }
+
+  function setupAccountModal() {
+    if (!state.accountModal) return;
+    const close = () => closeAccountModal();
+    state.accountModalClose?.addEventListener('click', close);
+    state.accountModalOverlay?.addEventListener('click', close);
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && state.accountModal && !state.accountModal.classList.contains('hidden')) {
+        closeAccountModal();
+      }
+    });
+  }
+
+  function setupManualModal() {
+    if (!state.manualModal) return;
+    state.manualModalClose?.addEventListener('click', () => closeManualDataModal());
+    state.manualModalOverlay?.addEventListener('click', () => closeManualDataModal());
+    state.manualModalCancel?.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeManualDataModal();
+    });
+    state.manualModalClear?.addEventListener('click', handleManualDataClear);
+    state.manualModalSave?.addEventListener('click', handleManualDataSave);
+    if (state.manualModalInput) {
+      state.manualModalInput.addEventListener('input', () => updateManualModalValidity());
+      state.manualModalInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          if (state.manualModalEnterLock) return;
+          state.manualModalEnterLock = true;
+          window.setTimeout(() => { state.manualModalEnterLock = false; }, 250);
+          handleManualDataSave();
+        }
+      });
+    }
+  }
+
+  function attachAccountCardDelegates() {
+    const containers = [document.getElementById('assets-container'), document.getElementById('liabilities-container')];
+    containers.forEach((container) => {
+      if (!container) return;
+      container.addEventListener('click', (event) => {
+        const card = event.target.closest('[data-account-id]');
+        if (!card) return;
+        const accountId = card.dataset.accountId;
+        if (!accountId || !accountRegistry.has(accountId)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openAccountModal(accountRegistry.get(accountId));
+      });
+    });
+  }
+
+  function openAccountModal(account) {
+    if (!account) return;
+    state.activeAccount = account;
+    abortCurrentLoad();
+    if (state.accountModalTitle) state.accountModalTitle.textContent = account.name || 'Account Details';
+    if (state.accountModalSubtitle) {
+      const subtitleParts = [];
+      if (account.institution) subtitleParts.push(account.institution);
+      if (account.last_four) subtitleParts.push(`•••• ${account.last_four}`);
+      if (subtitleParts.length) {
+        state.accountModalSubtitle.textContent = subtitleParts.join(' · ');
+        state.accountModalSubtitle.classList.remove('hidden');
+      } else {
+        state.accountModalSubtitle.textContent = '';
+        state.accountModalSubtitle.classList.add('hidden');
+      }
+    }
+
+    renderAccountTabs(account);
+    showModal(state.accountModal, state.accountModalContent);
+  }
+
+  function closeAccountModal() {
+    abortCurrentLoad();
+    state.activeAccount = null;
+    closeManualDataModal();
+    hideModal(state.accountModal, state.accountModalContent);
+  }
+
+  function renderAccountTabs(account) {
+    if (!state.accountModalTabs || !state.accountModalTabContent) return;
+    state.accountModalTabs.innerHTML = '';
+    state.tabButtons = {};
+
+    const transactionsTab = document.createElement('button');
+    transactionsTab.type = 'button';
+    transactionsTab.className = 'tab px-4 py-2 text-sm text-slate-500 hover:text-slate-700';
+    transactionsTab.textContent = 'Transactions';
+    transactionsTab.addEventListener('click', () => selectTab('transactions'));
+
+    const manualTab = document.createElement('button');
+    manualTab.type = 'button';
+    manualTab.className = 'tab px-4 py-2 text-sm text-slate-500 hover:text-slate-700';
+    manualTab.textContent = 'Manual Data';
+    manualTab.addEventListener('click', () => selectTab('manual'));
+
+    state.tabButtons.transactions = transactionsTab;
+    state.tabButtons.manual = manualTab;
+
+    state.accountModalTabs.append(transactionsTab, manualTab);
+
+    selectTab('manual', { account });
+  }
+
+  function selectTab(name, { account } = {}) {
+    state.activeTab = name;
+    Object.entries(state.tabButtons).forEach(([key, btn]) => {
+      if (!btn) return;
+      if (key === name) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    const activeAccount = account || state.activeAccount;
+    if (!activeAccount) return;
+
+    if (name === 'manual') {
+      renderManualDataTab(activeAccount);
+    } else if (name === 'transactions') {
+      renderTransactionsPlaceholder();
+    }
+  }
+
+  function renderTransactionsPlaceholder() {
+    if (!state.accountModalTabContent) return;
+    state.accountModalTabContent.innerHTML = '';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'p-6 text-center text-slate-500';
+    placeholder.textContent = 'Transactions view coming soon.';
+    state.accountModalTabContent.appendChild(placeholder);
+  }
+
+  function renderManualDataTab(account) {
+    if (!state.accountModalTabContent) return;
+    const cached = getManualDataFromCache(account.id);
+    if (cached) {
+      renderManualDataContent(account, { status: 'ready', data: cached });
+      loadManualData(account, { showLoading: false });
+    } else {
+      renderManualDataContent(account, { status: 'loading' });
+      loadManualData(account, { showLoading: true });
+    }
+  }
+
+  function renderManualDataContent(account, payload) {
+    if (!state.accountModalTabContent) return;
+    state.accountModalTabContent.innerHTML = '';
+    state.manualDataEditButton = null;
+
+    const container = document.createElement('div');
+    container.className = 'space-y-6';
+
+    if (payload.status === 'loading') {
+      const spinnerWrapper = document.createElement('div');
+      spinnerWrapper.className = 'flex items-center justify-center py-8';
+      const spinner = document.createElement('div');
+      spinner.className = 'spinner';
+      spinnerWrapper.appendChild(spinner);
+      container.appendChild(spinnerWrapper);
+      state.accountModalTabContent.appendChild(container);
+      return;
+    }
+
+    if (payload.status === 'error') {
+      const errorBox = document.createElement('div');
+      errorBox.className = 'bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-lg';
+      const message = document.createElement('p');
+      message.className = 'font-medium';
+      message.textContent = payload.error?.message || 'Unable to load manual data.';
+      errorBox.appendChild(message);
+      if (payload.error?.requestId) {
+        const requestIdEl = document.createElement('p');
+        requestIdEl.className = 'text-xs text-rose-500 mt-1';
+        requestIdEl.textContent = `Request ID: ${payload.error.requestId}`;
+        errorBox.appendChild(requestIdEl);
+      }
+      const retryBtn = document.createElement('button');
+      retryBtn.type = 'button';
+      retryBtn.className = 'mt-4 bg-rose-600 text-white px-4 py-2 rounded-md hover:bg-rose-700 transition-colors';
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', () => loadManualData(account, { showLoading: true }));
+      errorBox.appendChild(retryBtn);
+      container.appendChild(errorBox);
+      state.accountModalTabContent.appendChild(container);
+      return;
+    }
+
+    const data = payload.data || {};
+    const currency = data.currency || account.currency || 'USD';
+    const rentRollValue = data.rent_roll != null && !Number.isNaN(Number(data.rent_roll)) ? Number(data.rent_roll) : null;
+    const rentRollDisplay = formatCurrency(rentRollValue, currency);
+    const updatedDisplay = formatRelativeTime(data.updated_at);
+    const annualRent = rentRollValue != null ? rentRollValue * 12 : null;
+
+    const headerRow = document.createElement('div');
+    headerRow.className = 'flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4';
+
+    const valueBlock = document.createElement('div');
+    valueBlock.className = 'space-y-1';
+    const rentLabel = document.createElement('p');
+    rentLabel.className = 'text-sm font-medium text-slate-600 uppercase tracking-wide';
+    rentLabel.textContent = 'Rent Roll';
+    const rentValueEl = document.createElement('p');
+    rentValueEl.className = 'text-2xl font-bold text-slate-900';
+    rentValueEl.textContent = rentRollDisplay;
+    rentValueEl.dataset.role = 'manual-data-rent-roll';
+    const updatedEl = document.createElement('p');
+    updatedEl.className = 'text-xs text-slate-500';
+    updatedEl.textContent = `Last updated ${updatedDisplay}`;
+    updatedEl.dataset.role = 'manual-data-updated';
+    valueBlock.append(rentLabel, rentValueEl, updatedEl);
+
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = 'self-start bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors';
+    editButton.textContent = rentRollValue != null ? 'Edit' : 'Add Rent Roll';
+    editButton.addEventListener('click', () => openManualDataModal(account));
+    state.manualDataEditButton = editButton;
+
+    headerRow.append(valueBlock, editButton);
+    container.appendChild(headerRow);
+
+    const calculatedSection = document.createElement('div');
+    calculatedSection.className = 'grid grid-cols-1 gap-4';
+
+    const annualCard = document.createElement('div');
+    annualCard.className = 'bg-slate-50 border border-slate-200 rounded-lg p-4';
+    const annualLabel = document.createElement('p');
+    annualLabel.className = 'text-sm font-medium text-slate-600';
+    annualLabel.textContent = 'Annual Rent (calculated)';
+    const annualValueEl = document.createElement('p');
+    annualValueEl.className = 'text-lg font-semibold text-slate-800';
+    annualValueEl.textContent = rentRollValue != null ? formatCurrency(annualRent, currency) : '—';
+    annualValueEl.dataset.role = 'manual-data-annual-rent';
+    const annualHint = document.createElement('p');
+    annualHint.className = 'text-xs text-slate-500 mt-1';
+    annualHint.textContent = 'Calculated automatically from monthly rent roll × 12.';
+    calculatedSection.appendChild(annualCard);
+    annualCard.append(annualLabel, annualValueEl, annualHint);
+
+    const calculatedNotice = document.createElement('div');
+    calculatedNotice.className = 'text-xs text-slate-500';
+    calculatedNotice.textContent = 'Calculated fields are read-only and update automatically when you save manual data.';
+
+    container.append(calculatedSection, calculatedNotice);
+    state.accountModalTabContent.appendChild(container);
+  }
+
+  function loadManualData(account, { showLoading }) {
+    abortCurrentLoad();
+    if (!state.accountModalTabContent) return;
+    if (showLoading) {
+      renderManualDataContent(account, { status: 'loading' });
+    }
+    const controller = new AbortController();
+    state.loadController = controller;
+    BackendAdapter.fetchManualData(account.id, { signal: controller.signal })
+      .then((data) => {
+        if (state.activeAccount && state.activeAccount.id === account.id) {
+          renderManualDataContent(account, { status: 'ready', data });
+          updateRentRollSummaryDisplay();
+        }
+      })
+      .catch((error) => {
+        if (error.name === 'AbortError') return;
+        const enriched = error instanceof Error ? error : new Error(String(error));
+        if (state.activeAccount && state.activeAccount.id === account.id) {
+          renderManualDataContent(account, { status: 'error', error: enriched });
+        }
+      })
+      .finally(() => {
+        if (state.loadController === controller) {
+          state.loadController = null;
+        }
+      });
+  }
+
+  function abortCurrentLoad() {
+    if (state.loadController) {
+      try { state.loadController.abort(); } catch (_) {}
+      state.loadController = null;
+    }
+  }
+
+  function openManualDataModal(account) {
+    if (!state.manualModal || !state.manualModalInput) return;
+    state.manualModalSaving = false;
+    state.manualModalInput.value = '';
+    const cached = getManualDataFromCache(account.id);
+    if (cached && cached.rent_roll != null && !Number.isNaN(Number(cached.rent_roll))) {
+      state.manualModalInput.value = Number(cached.rent_roll).toString();
+    }
+    hideManualModalError();
+    state.activeAccount = account;
+    state.manualModal.dataset.accountId = account.id;
+    updateManualModalValidity();
+    showModal(state.manualModal, state.manualModalContent, () => {
+      state.manualModalInput?.focus();
+      state.manualModalInput?.select();
+    });
+  }
+
+  function closeManualDataModal() {
+    abortCurrentSave();
+    hideModal(state.manualModal, state.manualModalContent);
+  }
+
+  function abortCurrentSave() {
+    if (state.saveController) {
+      try { state.saveController.abort(); } catch (_) {}
+      state.saveController = null;
+    }
+    state.manualModalSaving = false;
+    updateManualModalValidity();
+  }
+
+  function handleManualDataSave(event) {
+    if (event) event.preventDefault();
+    if (!state.activeAccount) return;
+    const validation = updateManualModalValidity({ showError: true });
+    if (!validation.valid) {
+      return;
+    }
+
+    if (!BackendAdapter.isBackendEnabled()) {
+      showToast('Backend not enabled');
+      return;
+    }
+
+    performManualDataMutation({ rentRoll: validation.value, action: 'save' });
+  }
+
+  function handleManualDataClear(event) {
+    if (event) event.preventDefault();
+    if (!state.activeAccount) return;
+    const confirmClear = window.confirm('Clear manual rent roll value?');
+    if (!confirmClear) return;
+    if (!BackendAdapter.isBackendEnabled()) {
+      showToast('Backend not enabled');
+      return;
+    }
+    performManualDataMutation({ rentRoll: null, action: 'clear' });
+  }
+
+  function performManualDataMutation({ rentRoll, action }) {
+    const account = state.activeAccount;
+    if (!account || !state.manualModalInput) return;
+    state.manualModalSaving = true;
+    updateManualModalValidity();
+    disableManualModalButtons(true);
+    const controller = new AbortController();
+    state.saveController = controller;
+
+    BackendAdapter.updateManualData(account.id, { rent_roll: rentRoll }, { signal: controller.signal })
+      .then(({ data, requestId }) => {
+        updateManualDataCache(account.id, data, account.currency);
+        showToast('Manual data saved successfully');
+        closeManualDataModal();
+        if (state.activeAccount && state.activeAccount.id === account.id) {
+          renderManualDataTab(account);
+        }
+        updateRentRollSummaryDisplay();
+        if (requestId) {
+          console.log('[ManualData] request-id:', requestId);
+        }
+      })
+      .catch((error) => {
+        if (error.name === 'AbortError') return;
+        const message = error.code === 'BACKEND_DISABLED'
+          ? 'Backend not enabled'
+          : (error.message || 'Failed to save manual data');
+        const toastMessage = error.requestId ? `${message} (request-id: ${error.requestId})` : message;
+        showToast(toastMessage);
+        showManualModalError(message, error.requestId);
+      })
+      .finally(() => {
+        if (state.saveController === controller) {
+          state.saveController = null;
+        }
+        state.manualModalSaving = false;
+        disableManualModalButtons(false);
+        updateManualModalValidity();
+      });
+  }
+
+  function disableManualModalButtons(disabled) {
+    [state.manualModalSave, state.manualModalClear, state.manualModalCancel, state.manualModalClose].forEach((btn) => {
+      if (!btn) return;
+      if (disabled) {
+        btn.setAttribute('disabled', 'true');
+      } else {
+        btn.removeAttribute('disabled');
+      }
+    });
+  }
+
+  function showManualModalError(message, requestId) {
+    if (!state.manualModalError) return;
+    const detail = requestId ? `${message} (request-id: ${requestId})` : message;
+    state.manualModalError.textContent = detail;
+    state.manualModalError.classList.remove('hidden');
+  }
+
+  function hideManualModalError() {
+    if (!state.manualModalError) return;
+    state.manualModalError.textContent = '';
+    state.manualModalError.classList.add('hidden');
+  }
+
+  function updateManualModalValidity({ showError = false } = {}) {
+    if (!state.manualModalInput || !state.manualModalSave) return { valid: false };
+    const raw = state.manualModalInput.value.trim();
+    const validation = validateRentRollInput(raw);
+    const disableSave = state.manualModalSaving || !validation.valid;
+    if (disableSave) {
+      state.manualModalSave.setAttribute('disabled', 'true');
+    } else {
+      state.manualModalSave.removeAttribute('disabled');
+    }
+    if (!showError || validation.valid) {
+      hideManualModalError();
+    } else {
+      showManualModalError(validation.message);
+    }
+    return validation;
+  }
+
+  function validateRentRollInput(raw) {
+    if (raw === '') {
+      return { valid: false, message: 'Please enter a value or use Clear' };
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      return { valid: false, message: 'Please enter a numeric value' };
+    }
+    if (value < 0) {
+      return { valid: false, message: 'Please enter a valid non-negative number' };
+    }
+    if (value > 1e9) {
+      return { valid: false, message: 'Value is too large (max 1,000,000,000)' };
+    }
+    const rounded = Math.round(value * 100) / 100;
+    return { valid: true, value: rounded };
+  }
+
+  function showModal(modal, content, onShown) {
+    if (!modal || !content) return;
+    modal.classList.remove('hidden');
+    window.requestAnimationFrame(() => {
+      content.classList.remove('scale-95', 'opacity-0');
+      content.classList.add('scale-100', 'opacity-100');
+      if (typeof onShown === 'function') {
+        window.setTimeout(onShown, 20);
+      }
+    });
+  }
+
+  function hideModal(modal, content) {
+    if (!modal || !content) return;
+    content.classList.add('scale-95');
+    content.classList.remove('scale-100');
+    content.classList.remove('opacity-100');
+    content.classList.add('opacity-0');
+    window.setTimeout(() => {
+      modal.classList.add('hidden');
+      content.classList.remove('opacity-0');
+    }, 150);
+  }
+
+  return {
+    bind,
+    openAccountModal,
+    closeAccountModal,
+    openManualModal: openManualDataModal,
+  };
+})();
+
+window.bindManualDataUI = () => {
+  ManualDataUI.bind();
+};
+
+window.openManualDataModal = (accountId, rentRoll, currency = 'USD') => {
+  ManualDataUI.bind();
+  if (!accountId) {
+    throw new Error('accountId is required');
+  }
+  const existing = accountRegistry.get(accountId) || { id: accountId, name: accountId, currency };
+  if (!accountRegistry.has(accountId)) {
+    accountRegistry.set(accountId, existing);
+  }
+  if (currency && existing.currency !== currency) {
+    existing.currency = currency;
+  }
+  if (rentRoll !== undefined) {
+    updateManualDataCache(accountId, {
+      account_id: accountId,
+      rent_roll: rentRoll,
+      updated_at: new Date().toISOString(),
+      currency,
+    }, currency);
+  }
+  ManualDataUI.openAccountModal(existing);
+  ManualDataUI.openManualModal(existing);
+};
 
 function ensureManualDataBinder() {
   if (!window.FEATURE_MANUAL_DATA || window.__manualDataBound) return;
@@ -399,17 +1083,19 @@ async function init() {
   const liabilitiesContainer = document.getElementById('liabilities-container');
   const rentRollValue = document.getElementById('rent-roll-total');
   const totalEquityValue = document.getElementById('total-equity-balance');
-  
+
   if (!assetsContainer || !liabilitiesContainer) {
     console.error('Required containers not found');
     return;
   }
-  
+
   assetsContainer.innerHTML = '';
   liabilitiesContainer.innerHTML = '';
-  
+  accountRegistry.clear();
+  clearManualDataCache();
+
   const accounts = await BackendAdapter.fetchAccounts();
-  
+
   let totalAssets = 0;
   let totalLiabilities = 0;
   
@@ -421,7 +1107,8 @@ async function init() {
     }
     
     const { card, balance } = await renderAccountCard(account);
-    
+    accountRegistry.set(account.id, { ...account, balance });
+
     if (category === 'asset') {
       assetsContainer.appendChild(card);
       totalAssets += balance;
@@ -434,6 +1121,7 @@ async function init() {
   const rentRoll = await calculateRentRoll(accounts);
   if (rentRollValue) {
     rentRollValue.textContent = formatCurrency(rentRoll);
+    updateRentRollSummaryDisplay();
   }
   
   const totalEquity = totalAssets - totalLiabilities;
