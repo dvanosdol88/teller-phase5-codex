@@ -1,151 +1,200 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Teller Cached Dashboard (Visual Only)</title>
-  <link rel="stylesheet" href="./styles.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLC Financial Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #F8FAFC;
+            color: #334155;
+        }
+        .account-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .account-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .modal-bg {
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: all 0.3s ease;
+        }
+        .tab.active {
+            border-bottom: 2px solid #4F46E5;
+            color: #4F46E5;
+            font-weight: 600;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #4F46E5;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .toast.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
 </head>
-<body>
-  <header class="page-header">
-    <div class="header-inner">
-      <div class="brand">
-        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Ccircle cx='12' cy='12' r='10' stroke='%236ee7b7' stroke-width='2'/%3E%3Cpath d='M7 13l3 3 7-7' stroke='%2360a5fa' stroke-width='2' fill='none'/%3E%3C/svg%3E" alt="Teller" width="24" height="24" />
-        <h1>Teller Cached Dashboard</h1>
-      </div>
-      <div class="actions">
-        <button id="connect-btn" class="btn" disabled>Connect account</button>
-        <button id="disconnect-btn" class="btn btn-secondary" disabled>Disconnect</button>
-      </div>
-    </div>
-  </header>
+<body class="antialiased">
 
-  <section class="status-bar">
-    <div class="status-item">
-      <div class="label">Environment</div>
-      <div class="value" id="env-value">development</div>
-    </div>
-    <div class="status-item">
-      <div class="label">User</div>
-      <div class="value" id="user-value">—</div>
-    </div>
-    <div class="status-item token">
-      <div class="label">Access token</div>
-      <div class="value" id="token-value">—</div>
-    </div>
-  </section>
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-slate-800">LLC Financial Dashboard</h1>
+            <div class="hidden md:flex space-x-6 items-center">
+                <a href="#dashboard" class="text-slate-600 hover:text-slate-900">Dashboard</a>
+                <button id="refresh-data-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">🔄 Refresh Data</button>
+            </div>
+        </nav>
+    </header>
 
-  <main class="page-main">
-    <section class="accounts">
-      <div class="accounts-header">
-        <h2>Accounts</h2>
-        <div class="actions">
-          <button id="refresh-all" class="btn btn-secondary">Refresh all</button>
+    <main class="container mx-auto px-6 py-12">
+
+        <section class="text-center mb-16">
+            <h2 class="text-4xl font-bold text-slate-800 mb-4">Interactive Financial Flow</h2>
+            <p class="max-w-3xl mx-auto text-lg text-slate-600">This dashboard visualizes the financial structure of your LLC. Click on any account to expand its details, view transactions, and manage manual data.</p>
+        </section>
+
+        <section id="dashboard" class="mb-16 relative">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-x-8 gap-y-16 items-start">
+                <!-- Personal Members & Rent -->
+                <div class="text-center space-y-8">
+                    <div class="flex justify-center items-center gap-8">
+                        <div id="julie-finances" data-account-id="juliePersonalFinances" class="account-card bg-white w-32 h-32 rounded-full shadow-lg border border-slate-200 flex items-center justify-center">
+                            <h4 class="font-bold text-slate-800 text-xl">Julie</h4>
+                        </div>
+                        <div id="david-finances" data-account-id="davidPersonalFinances" class="account-card bg-white w-32 h-32 rounded-full shadow-lg border border-slate-200 flex items-center justify-center">
+                            <h4 class="font-bold text-slate-800 text-xl">David</h4>
+                        </div>
+                    </div>
+                    <div id="heloc-loan" data-account-id="helocLoan" class="account-card bg-rose-50 p-4 rounded-full max-w-xs mx-auto">
+                        <div class="flex justify-between items-center px-2">
+                            <span class="font-semibold text-rose-700">HELOC Loan</span>
+                            <span id="heloc-loan-balance" class="font-bold text-rose-900">$0.00</span>
+                        </div>
+                    </div>
+                    <div id="rent-roll" data-account-id="rent" class="account-card bg-green-50 p-3 rounded-lg max-w-[220px] mx-auto">
+                        <div class="text-center">
+                            <span class="font-semibold text-slate-800">Rent Roll</span>
+                            <p id="rent-roll-total" class="font-bold text-slate-900 text-xl">$0.00</p>
+                            <p class="text-xs text-slate-600">Total Monthly Rent</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LLC Assets and Liabilities -->
+                <div class="lg:col-span-2 text-center">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4">672 Elm St., LLC</h3>
+                    <div class="bg-white p-6 rounded-xl shadow-lg border border-slate-200">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <!-- Assets Column -->
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center">Assets</h4>
+                                <div id="assets-container" class="space-y-4">
+                                    <!-- Asset accounts will be rendered here -->
+                                </div>
+                            </div>
+                            <!-- Liabilities Column -->
+                            <div>
+                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center">Liabilities</h4>
+                                <div id="liabilities-container" class="space-y-4">
+                                    <!-- Liability accounts will be rendered here -->
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-8 text-center">
+                            <div id="equity-card" class="bg-green-100 p-4 rounded-lg max-w-xs mx-auto">
+                                <span class="font-semibold text-slate-800">Total Equity</span>
+                                <p id="total-equity-balance" class="font-bold text-green-800 text-2xl">$0.00</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div id="empty-state" class="text-center py-16 hidden">
+            <div class="text-6xl mb-4">💳</div>
+            <h3 class="text-2xl font-bold text-slate-800 mb-2">No accounts connected</h3>
+            <p class="text-slate-600">Connect your bank account to view your financial data.</p>
         </div>
-      </div>
 
-      <div id="empty-state" class="empty-state hidden">
-        <div class="empty-icon">💳</div>
-        <div class="empty-title">No accounts connected</div>
-        <div class="empty-subtitle">Use “Connect account” to link your bank and view cached data.</div>
-      </div>
-
-      <div id="accounts-grid" class="cards-grid"></div>
-    </section>
-  </main>
-
-  <template id="account-card-template">
-    <article class="card" data-account-id="">
-      <div class="card-inner">
-        <div class="card-face card-face-front">
-          <div class="card-header">
-            <div>
-              <div class="account-name">Account</div>
-              <div class="account-subtitle"></div>
+    </main>
+    
+    <!-- Account Details Modal -->
+    <div id="account-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-bg fixed inset-0 bg-black bg-opacity-50"></div>
+        <div class="modal-content bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl relative flex flex-col transform scale-95 opacity-0">
+            <div class="flex items-center justify-between p-6 border-b border-slate-200">
+                <div>
+                    <h3 id="modal-title" class="text-2xl font-bold text-slate-800">Account Details</h3>
+                    <p id="modal-subtitle" class="text-sm text-slate-500"></p>
+                </div>
+                <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 text-3xl leading-none">&times;</button>
             </div>
-            <div class="card-actions">
-              <button class="btn btn-icon flip-btn" title="Flip">↺</button>
+            <div class="flex-grow p-6 overflow-y-auto">
+                <div id="modal-tabs" class="border-b border-slate-200 mb-6 flex space-x-4"></div>
+                <div id="modal-tab-content"></div>
             </div>
-          </div>
-          <div class="balances">
-            <div class="balance">
-              <div class="label">Available</div>
-              <div class="value balance-available">$0.00</div>
+            <div id="modal-footer" class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
+                <!-- Footer content will be injected here -->
             </div>
-            <div class="balance">
-              <div class="label">Ledger</div>
-              <div class="value balance-ledger">$0.00</div>
-            </div>
-            <div class="meta">
-              <span class="balance-cached">—</span>
-            </div>
-          </div>
-          <div class="card-footer">
-            <button class="btn refresh-btn">Refresh</button>
-          </div>
         </div>
-
-        <div class="card-face card-face-back">
-          <div class="card-header">
-            <div>
-              <div class="account-name">Account</div>
-              <div class="account-subtitle"></div>
-            </div>
-            <div class="card-actions">
-              <button class="btn btn-icon flip-btn" title="Flip">↺</button>
-            </div>
-          </div>
-          <div class="back-view-toggle">
-            <button class="toggle-btn active" data-view="transactions">Transactions</button>
-            <button class="toggle-btn" data-view="manual-data">Manual Data</button>
-          </div>
-          <div class="transactions view-panel active">
-            <ul class="transactions-list"></ul>
-            <div class="transactions-empty">No cached transactions</div>
-          </div>
-          <div class="manual-data view-panel">
-            <div class="manual-data-content">
-              <div class="manual-data-field">
-                <div class="label">Rent Roll</div>
-                <div class="value rent-roll-value">—</div>
-              </div>
-              <div class="manual-data-meta">
-                <span class="manual-data-updated">—</span>
-              </div>
-            </div>
-            <button class="btn edit-manual-data-btn">Edit</button>
-          </div>
-          <div class="card-footer">
-            <span class="transactions-cached">—</span>
-          </div>
-        </div>
-      </div>
-    </article>
-  </template>
-
-  <div id="toast" class="toast hidden"></div>
-
-  <div id="manual-data-modal" class="modal hidden">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3>Edit Manual Data</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-field">
-          <label for="rent-roll-input">Rent Roll ($)</label>
-          <input type="number" id="rent-roll-input" step="0.01" min="0" placeholder="Enter amount">
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary modal-cancel">Cancel</button>
-        <button class="btn btn-secondary modal-clear">Clear</button>
-        <button class="btn modal-save">Save</button>
-      </div>
     </div>
-  </div>
 
-  <script src="./index.js" defer></script>
+    <!-- Manual Data Edit Modal -->
+    <div id="manual-data-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-bg fixed inset-0 bg-black bg-opacity-50"></div>
+        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl relative transform scale-95 opacity-0">
+            <div class="flex items-center justify-between p-6 border-b border-slate-200">
+                <h3 class="text-2xl font-bold text-slate-800">Edit Manual Data</h3>
+                <button class="modal-close text-slate-400 hover:text-slate-600 text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <label for="rent-roll-input" class="block text-sm font-medium text-slate-700 mb-2">Rent Roll ($)</label>
+                    <input type="number" id="rent-roll-input" step="0.01" min="0" placeholder="Enter amount" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex justify-end space-x-3">
+                <button class="modal-cancel bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Cancel</button>
+                <button class="modal-clear bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Clear</button>
+                <button class="modal-save bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast hidden"></div>
+
+    <script src="./index.js" defer></script>
 </body>
 </html>
