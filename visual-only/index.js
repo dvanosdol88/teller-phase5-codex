@@ -256,6 +256,7 @@ async function init() {
 
 function setupRefreshButton() {
   const refreshBtn = document.getElementById('refresh-data-btn');
+  const connectBankBtn = document.getElementById('connect-bank');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async () => {
       try {
@@ -271,6 +272,21 @@ function setupRefreshButton() {
       // Fallback: just refresh the dashboard data
       showToast('Refreshing data...');
       await init();
+    });
+  }
+  if (connectBankBtn) {
+    connectBankBtn.addEventListener('click', async () => {
+      try {
+        await ensureTellerScriptLoaded();
+        const connect = getConnectInstance();
+        if (connect && typeof connect.open === 'function') {
+          connect.open();
+          return;
+        }
+      } catch (e) {
+        console.error('Connect open failed:', e);
+      }
+      showToast('Unable to open Connect');
     });
   }
 }
