@@ -479,6 +479,156 @@ python3 -m http.server 8000
 
 **Note**: Live refresh is not implemented in visual-only mode.
 
+### Manual Data Tab Not Visible
+
+**Symptom**: Cannot see "Manual Data" tab on card back.
+
+**Causes**:
+- Card not flipped to back side
+- JavaScript not loaded correctly
+- UI rendering issue
+
+**Solutions**:
+
+1. **Flip the card first**:
+   - Click the "↺" button on the card front
+   - Card should flip to show transactions
+   - "Manual Data" tab should be visible next to "Transactions" tab
+
+2. **Check console for errors**
+
+3. **Verify JavaScript loaded**:
+   ```javascript
+   // In console
+   typeof renderCard
+   // Should return "function"
+   ```
+
+**Verification**: Card back should show two tabs: "Transactions" and "Manual Data".
+
+### Manual Data Modal Won't Open
+
+**Symptom**: Click "Edit" button but modal doesn't appear.
+
+**Causes**:
+- JavaScript error preventing modal
+- Event listener not attached
+- Modal element missing
+
+**Solutions**:
+
+1. **Check console for errors**
+
+2. **Verify modal element exists**:
+   ```javascript
+   // In console
+   document.getElementById('manual-data-modal')
+   // Should return element
+   ```
+
+3. **Manual test**:
+   ```javascript
+   // In console
+   openManualDataModal('acc_test', null, 'USD')
+   ```
+
+**Verification**: Modal should appear with input field and buttons.
+
+### Manual Data Save Fails
+
+**Symptom**: Click "Save" but data doesn't save or shows error.
+
+**Causes**:
+- Backend not enabled (`FEATURE_USE_BACKEND = false`)
+- Backend not running or unreachable
+- Invalid input value
+- Backend endpoint not implemented
+
+**Solutions**:
+
+1. **Check backend enabled**:
+   ```javascript
+   // In console
+   window.FEATURE_USE_BACKEND
+   // Should return true for backend integration
+   ```
+
+2. **Verify backend endpoint**:
+   ```bash
+   curl -X GET http://localhost:5000/api/db/accounts/acc_1/manual-data
+   ```
+   Expected response:
+   ```json
+   {
+     "account_id": "acc_1",
+     "rent_roll": null,
+     "updated_at": null
+   }
+   ```
+
+3. **Check input validation**:
+   - Value must be a non-negative number
+   - Empty values should use "Clear" button instead
+   - No special characters or text
+
+4. **Check Network tab** for PUT request:
+   - Should see PUT `/api/db/accounts/{id}/manual-data`
+   - Request body: `{"rent_roll": 2500}`
+   - Response should be 200 OK
+
+5. **Check backend logs** for errors
+
+**Verification**: After save, toast shows "Manual data saved successfully" and modal closes.
+
+### Manual Data Shows "—" Despite Backend Data
+
+**Symptom**: Backend returns rent_roll value but UI shows "—".
+
+**Causes**:
+- Backend response format incorrect
+- Data type mismatch
+- UI not refreshing after save
+
+**Solutions**:
+
+1. **Check backend response format**:
+   ```bash
+   curl http://localhost:5000/api/db/accounts/acc_1/manual-data
+   ```
+   Expected format:
+   ```json
+   {
+     "account_id": "acc_1",
+     "rent_roll": 2500.00,
+     "updated_at": "2025-10-18T12:34:56.789Z"
+   }
+   ```
+
+2. **Verify data types**:
+   - `rent_roll` should be number or null
+   - `updated_at` should be ISO 8601 timestamp string
+
+3. **Check console** for formatting errors
+
+4. **Reload page** to fetch fresh data
+
+**Verification**: Rent roll should display as currency (e.g., "$2,500.00").
+
+### Manual Data "Last Updated" Shows "—"
+
+**Symptom**: Saved manual data but timestamp shows "—".
+
+**Cause**: `updated_at` field missing or invalid format.
+
+**Solution**: Backend should return ISO 8601 timestamp:
+```json
+{
+  "updated_at": "2025-10-18T12:34:56.789Z"
+}
+```
+
+**Verification**: Timestamp should display as relative time (e.g., "2 minutes ago").
+
 ---
 
 ## Debugging Tips
