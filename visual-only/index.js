@@ -1,6 +1,7 @@
 window.FEATURE_USE_BACKEND = false;
 window.TEST_BEARER_TOKEN = undefined;
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
+console.log('[UI] build:', new Date().toISOString());
 
 // BackendAdapter - handles data fetching with fallback to mock data
 const BackendAdapter = (() => {
@@ -258,16 +259,15 @@ function setupRefreshButton() {
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async () => {
       try {
-        // Prefer opening Teller Connect from the Refresh button per deployment UX
-        if (!window.TellerConnect) {
-          await ensureTellerScriptLoaded();
-        }
-        if (window.TellerConnect) {
-          const connect = getConnectInstance();
+        await ensureTellerScriptLoaded();
+        const connect = getConnectInstance();
+        if (connect && typeof connect.open === 'function') {
           connect.open();
           return;
         }
-      } catch (_) {}
+      } catch (e) {
+        console.error('Connect open failed:', e);
+      }
       // Fallback: just refresh the dashboard data
       showToast('Refreshing data...');
       await init();
@@ -299,7 +299,7 @@ boot();
 
 // Lazy-load Teller Connect SDK if missing
 async function ensureTellerScriptLoaded() {
-  if (window.TellerConnect) return true;
+  if (window.TellerConnect || (window.teller && window.teller.connect)) return true;
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.teller.io/connect/connect.js';
@@ -308,16 +308,14 @@ async function ensureTellerScriptLoaded() {
     s.onerror = reject;
     document.head.appendChild(s);
   });
-  return Boolean(window.TellerConnect);
+  return Boolean(window.TellerConnect || (window.teller && window.teller.connect));
 }
 
 let __connectInstance;
 function getConnectInstance() {
   if (__connectInstance) return __connectInstance;
-  const TC = window.TellerConnect;
-  if (!TC) throw new Error('TellerConnect SDK not available');
-  const create = typeof TC.create === 'function' ? TC.create : (typeof TC === 'function' ? TC : null);
-  if (!create) throw new Error('TellerConnect SDK loaded but create function not found');
+  const create = resolveTellerCreate();
+  if (!create) throw new Error('Teller Connect SDK not available or unsupported shape');
   __connectInstance = create({
     applicationId: TELLER_APPLICATION_ID,
     onSuccess: async ({ accessToken }) => {
@@ -347,6 +345,16 @@ function getConnectInstance() {
     }
   });
   return __connectInstance;
+}
+
+function resolveTellerCreate() {
+  try {
+    if (window.TellerConnect && typeof window.TellerConnect.create === 'function') return window.TellerConnect.create;
+    if (typeof window.TellerConnect === 'function') return window.TellerConnect;
+    if (window.teller && window.teller.connect && typeof window.teller.connect.create === 'function') return window.teller.connect.create;
+    if (window.teller && typeof window.teller.connect === 'function') return window.teller.connect;
+  } catch (_) {}
+  return null;
 }
 
 function setupConnectButton() {
