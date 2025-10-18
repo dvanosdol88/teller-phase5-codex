@@ -1,5 +1,6 @@
 window.FEATURE_USE_BACKEND = false;
 window.TEST_BEARER_TOKEN = undefined;
+const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
 
 // BackendAdapter - handles data fetching with fallback to mock data
 const BackendAdapter = (() => {
@@ -269,6 +270,8 @@ async function boot() {
     console.error('Failed to load config:', err);
   }
   
+  setupConnectButton();
+  
   if (document.readyState !== 'loading') {
     await init();
     setupRefreshButton();
@@ -281,3 +284,48 @@ async function boot() {
 }
 
 boot();
+
+function setupConnectButton() {
+  const btn = document.getElementById('connect-btn');
+  if (!btn) return;
+  
+  if (!window.TellerConnect) {
+    btn.disabled = true;
+    btn.title = 'Teller Connect SDK not loaded';
+    return;
+  }
+  
+  const connect = window.TellerConnect({
+    applicationId: TELLER_APPLICATION_ID,
+    // environment: 'production', // optionally set if needed
+    onSuccess: async ({ accessToken }) => {
+      try {
+        // Prefer server-side exchange if available
+        const resp = await fetch('/api/connect/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ access_token: accessToken })
+        });
+        if (resp && resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          const bearer = data.access_token || data.token || accessToken;
+          BackendAdapter.setBearerToken(bearer);
+          window.FEATURE_USE_BACKEND = true;
+          showToast('Connected. Reloading...');
+          setTimeout(() => location.reload(), 300);
+          return;
+        }
+      } catch (_) {}
+      // Fallback: use Connect token directly for testing
+      window.TEST_BEARER_TOKEN = accessToken;
+      window.FEATURE_USE_BACKEND = true;
+      showToast('Connected (direct token). Reloading...');
+      setTimeout(() => location.reload(), 300);
+    },
+    onExit: () => {
+      showToast('Connect closed');
+    }
+  });
+  
+  btn.addEventListener('click', () => connect.open());
+}
