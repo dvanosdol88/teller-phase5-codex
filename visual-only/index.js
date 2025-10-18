@@ -1,5 +1,7 @@
 window.FEATURE_USE_BACKEND = false;
 window.TEST_BEARER_TOKEN = undefined;
+window.FEATURE_MANUAL_DATA = false;
+window.__manualDataBound = false;
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
 console.log('[UI] build:', new Date().toISOString());
 
@@ -81,7 +83,11 @@ const BackendAdapter = (() => {
   async function loadConfig() {
     try {
       if (typeof location !== 'undefined' && location.protocol === 'file:') {
-        return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
+        return {
+          enabled: Boolean(window.FEATURE_USE_BACKEND),
+          manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
+          apiBaseUrl: state.apiBaseUrl
+        };
       }
       const resp = await fetch('/api/config', { headers: { Accept: 'application/json' } });
       if (resp && resp.ok) {
@@ -92,11 +98,20 @@ const BackendAdapter = (() => {
         if (cfg && typeof cfg.FEATURE_USE_BACKEND === 'boolean') {
           window.FEATURE_USE_BACKEND = cfg.FEATURE_USE_BACKEND;
         }
+        if (cfg && typeof cfg.FEATURE_MANUAL_DATA === 'boolean') {
+          window.FEATURE_MANUAL_DATA = cfg.FEATURE_MANUAL_DATA;
+        } else {
+          window.FEATURE_MANUAL_DATA = false;
+        }
       }
     } catch (err) {
       recordDiagnostic('GET /api/config', err);
     }
-    return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
+    return {
+      enabled: Boolean(window.FEATURE_USE_BACKEND),
+      manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
+      apiBaseUrl: state.apiBaseUrl
+    };
   }
 
   function headers() {
@@ -203,6 +218,44 @@ function showToast(message) {
   window.clearTimeout(showToast._t);
   showToast._t = window.setTimeout(() => el.classList.add('hidden'), 2200);
 }
+
+function ensureManualDataBinder() {
+  if (!window.FEATURE_MANUAL_DATA || window.__manualDataBound) return;
+
+  const candidates = [
+    window.bindManualDataUI,
+    window.bindManualData,
+    window.__manualDataBinder
+  ];
+
+  let binder = null;
+  for (const candidate of candidates) {
+    if (typeof candidate === 'function') {
+      binder = candidate;
+      break;
+    }
+  }
+
+  if (!binder) return;
+
+  const executeBinder = () => {
+    try {
+      binder();
+      window.__manualDataBound = true;
+    } catch (err) {
+      window.__manualDataBound = false;
+      console.error('[ManualData] Failed to initialize manual data UI:', err);
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', executeBinder, { once: true });
+  } else {
+    executeBinder();
+  }
+}
+
+window.__ensureManualDataBinder = ensureManualDataBinder;
 
 let diagnosticsToastCooldown = 0;
 let diagnosticsBannerInitialized = false;
@@ -463,18 +516,23 @@ async function boot() {
     console.error('Failed to load config:', err);
   }
 
+  ensureManualDataBinder();
+
   await setupConnectButton();
 
   setupDiagnosticsBanner();
+  ensureManualDataBinder();
 
   if (document.readyState !== 'loading') {
     setupDiagnosticsBanner();
+    ensureManualDataBinder();
     await init();
     setupRefreshButton();
     setupThemeToggle();
   } else {
     document.addEventListener('DOMContentLoaded', async () => {
       setupDiagnosticsBanner();
+      ensureManualDataBinder();
       await init();
       setupRefreshButton();
       setupThemeToggle();

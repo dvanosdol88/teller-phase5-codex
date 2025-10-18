@@ -12,7 +12,8 @@ console.log(`[server] Backend URL: ${BACKEND_URL}`);
 app.use('/api/config', (req, res) => {
   res.json({
     apiBaseUrl: '/api',
-    FEATURE_USE_BACKEND: true
+    FEATURE_USE_BACKEND: true,
+    FEATURE_MANUAL_DATA: false
   });
 });
 
