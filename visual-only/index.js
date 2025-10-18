@@ -257,6 +257,18 @@ function setupRefreshButton() {
   const refreshBtn = document.getElementById('refresh-data-btn');
   if (refreshBtn) {
     refreshBtn.addEventListener('click', async () => {
+      try {
+        // Prefer opening Teller Connect from the Refresh button per deployment UX
+        if (!window.TellerConnect) {
+          await ensureTellerScriptLoaded();
+        }
+        if (window.TellerConnect) {
+          const connect = getConnectInstance();
+          connect.open();
+          return;
+        }
+      } catch (_) {}
+      // Fallback: just refresh the dashboard data
       showToast('Refreshing data...');
       await init();
     });
@@ -285,22 +297,27 @@ async function boot() {
 
 boot();
 
-function setupConnectButton() {
-  const btn = document.getElementById('connect-btn');
-  if (!btn) return;
-  
-  if (!window.TellerConnect) {
-    btn.disabled = true;
-    btn.title = 'Teller Connect SDK not loaded';
-    return;
-  }
-  
-  const connect = window.TellerConnect({
+// Lazy-load Teller Connect SDK if missing
+async function ensureTellerScriptLoaded() {
+  if (window.TellerConnect) return true;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.teller.io/connect/connect.js';
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  return Boolean(window.TellerConnect);
+}
+
+let __connectInstance;
+function getConnectInstance() {
+  if (__connectInstance) return __connectInstance;
+  __connectInstance = window.TellerConnect({
     applicationId: TELLER_APPLICATION_ID,
-    // environment: 'production', // optionally set if needed
     onSuccess: async ({ accessToken }) => {
       try {
-        // Prefer server-side exchange if available
         const resp = await fetch('/api/connect/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
@@ -316,7 +333,6 @@ function setupConnectButton() {
           return;
         }
       } catch (_) {}
-      // Fallback: use Connect token directly for testing
       window.TEST_BEARER_TOKEN = accessToken;
       window.FEATURE_USE_BACKEND = true;
       showToast('Connected (direct token). Reloading...');
@@ -326,6 +342,18 @@ function setupConnectButton() {
       showToast('Connect closed');
     }
   });
+  return __connectInstance;
+}
+
+function setupConnectButton() {
+  const btn = document.getElementById('connect-btn');
+  if (!btn) return;
   
+  if (!window.TellerConnect) {
+    btn.disabled = true;
+    btn.title = 'Teller Connect SDK not loaded';
+    return;
+  }
+  const connect = getConnectInstance();
   btn.addEventListener('click', () => connect.open());
 }
