@@ -292,6 +292,14 @@ function setupRefreshButton() {
 }
 
 async function boot() {
+  const savedToken = localStorage.getItem('teller_access_token');
+  if (savedToken) {
+    window.TEST_BEARER_TOKEN = savedToken;
+    BackendAdapter.setBearerToken(savedToken);
+    window.FEATURE_USE_BACKEND = true;
+    console.log('Loaded saved Teller token');
+  }
+  
   try {
     await BackendAdapter.loadConfig();
   } catch (err) {
@@ -350,6 +358,11 @@ function getConnectInstance() {
   __connectInstance = create({
     applicationId: TELLER_APPLICATION_ID,
     onSuccess: async ({ accessToken }) => {
+      localStorage.setItem('teller_access_token', accessToken);
+      window.TEST_BEARER_TOKEN = accessToken;
+      BackendAdapter.setBearerToken(accessToken);
+      window.FEATURE_USE_BACKEND = true;
+      
       try {
         const resp = await fetch('/api/connect/token', {
           method: 'POST',
@@ -358,17 +371,13 @@ function getConnectInstance() {
         });
         if (resp && resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          const bearer = data.access_token || data.token || accessToken;
-          BackendAdapter.setBearerToken(bearer);
-          window.FEATURE_USE_BACKEND = true;
-          showToast('Connected. Reloading...');
-          setTimeout(() => location.reload(), 300);
-          return;
+          console.log('Token posted to backend successfully');
         }
-      } catch (_) {}
-      window.TEST_BEARER_TOKEN = accessToken;
-      window.FEATURE_USE_BACKEND = true;
-      showToast('Connected (direct token). Reloading...');
+      } catch (e) {
+        console.log('Backend token endpoint not available, using direct token');
+      }
+      
+      showToast('Connected. Reloading...');
       setTimeout(() => location.reload(), 300);
     },
     onExit: () => {
