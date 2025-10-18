@@ -5,10 +5,74 @@ console.log('[UI] build:', new Date().toISOString());
 
 // BackendAdapter - handles data fetching with fallback to mock data
 const BackendAdapter = (() => {
+  const DIAGNOSTICS_STORAGE_KEY = 'backend_diagnostics_v1';
+
+  function loadStoredDiagnostics() {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return [];
+    }
+    try {
+      const raw = window.localStorage.getItem(DIAGNOSTICS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed.slice(-20);
+      }
+    } catch (err) {
+      console.warn('[BackendAdapter] Failed to read diagnostics cache:', err);
+    }
+    return [];
+  }
+
   const state = {
     apiBaseUrl: "/api",
     bearerToken: undefined,
+    diagnostics: loadStoredDiagnostics(),
   };
+
+  function persistDiagnostics() {
+    if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+      return;
+    }
+    try {
+      window.localStorage.setItem(DIAGNOSTICS_STORAGE_KEY, JSON.stringify(state.diagnostics.slice(-20)));
+    } catch (err) {
+      console.warn('[BackendAdapter] Failed to persist diagnostics cache:', err);
+    }
+  }
+
+  function emitDiagnosticsUpdate(entry) {
+    try {
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('backend:diagnostic', { detail: entry }));
+      }
+    } catch (err) {
+      console.warn('[BackendAdapter] Failed to emit diagnostics event:', err);
+    }
+  }
+
+  function recordDiagnostic(endpoint, error) {
+    const entry = {
+      endpoint,
+      message: (error && error.message) || String(error) || 'Unknown error',
+      timestamp: new Date().toISOString(),
+    };
+    state.diagnostics.push(entry);
+    state.diagnostics = state.diagnostics.slice(-20);
+    persistDiagnostics();
+    console.warn('[BackendAdapter] Falling back to mock data:', entry);
+    emitDiagnosticsUpdate(entry);
+  }
+
+  function clearDiagnostics() {
+    state.diagnostics = [];
+    persistDiagnostics();
+    emitDiagnosticsUpdate(undefined);
+  }
+
+  function getDiagnostics() {
+    return state.diagnostics.slice();
+  }
 
   function isBackendEnabled() {
     return Boolean(window.FEATURE_USE_BACKEND);
@@ -29,7 +93,9 @@ const BackendAdapter = (() => {
           window.FEATURE_USE_BACKEND = cfg.FEATURE_USE_BACKEND;
         }
       }
-    } catch {}
+    } catch (err) {
+      recordDiagnostic('GET /api/config', err);
+    }
     return { enabled: Boolean(window.FEATURE_USE_BACKEND), apiBaseUrl: state.apiBaseUrl };
   }
 
@@ -60,7 +126,8 @@ const BackendAdapter = (() => {
         type: a.type,
         subtype: a.subtype
       }));
-    } catch {
+    } catch (err) {
+      recordDiagnostic('GET /db/accounts', err);
       return MOCK_ACCOUNTS;
     }
   }
@@ -72,7 +139,8 @@ const BackendAdapter = (() => {
       if (!resp.ok) throw new Error("balance failed");
       const data = await resp.json();
       return { ...data.balance, cached_at: data.cached_at };
-    } catch {
+    } catch (err) {
+      recordDiagnostic(`GET /db/accounts/${accountId}/balances`, err);
       return MOCK_BALANCES[accountId];
     }
   }
@@ -81,9 +149,13 @@ const BackendAdapter = (() => {
     if (!isBackendEnabled()) return MOCK_MANUAL_DATA[accountId] || { account_id: accountId, rent_roll: null, updated_at: null };
     try {
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, { headers: headers() });
-      if (!resp.ok) return { account_id: accountId, rent_roll: null, updated_at: null };
+      if (!resp.ok) {
+        recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, new Error(`manual data request failed with status ${resp.status}`));
+        return { account_id: accountId, rent_roll: null, updated_at: null };
+      }
       return await resp.json();
-    } catch {
+    } catch (err) {
+      recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, err);
       return { account_id: accountId, rent_roll: null, updated_at: null };
     }
   }
@@ -94,7 +166,9 @@ const BackendAdapter = (() => {
     setBearerToken,
     fetchAccounts,
     fetchCachedBalance,
-    fetchManualData
+    fetchManualData,
+    getDiagnostics,
+    clearDiagnostics
   };
 })();
 
@@ -128,6 +202,69 @@ function showToast(message) {
   el.classList.remove('hidden');
   window.clearTimeout(showToast._t);
   showToast._t = window.setTimeout(() => el.classList.add('hidden'), 2200);
+}
+
+let diagnosticsToastCooldown = 0;
+let diagnosticsBannerInitialized = false;
+
+function setupDiagnosticsBanner() {
+  if (diagnosticsBannerInitialized) return;
+
+  const banner = document.getElementById('diagnostics-banner');
+  const detailEl = document.getElementById('diagnostics-detail');
+  const timestampEl = document.getElementById('diagnostics-timestamp');
+  const dismissBtn = document.getElementById('diagnostics-dismiss');
+
+  if (!banner || !detailEl) {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupDiagnosticsBanner, { once: true });
+    }
+    return;
+  }
+
+  diagnosticsBannerInitialized = true;
+
+  function renderDiagnosticsBanner() {
+    const diagnostics = BackendAdapter.getDiagnostics();
+    if (!diagnostics || diagnostics.length === 0) {
+      banner.classList.add('hidden');
+      if (detailEl) detailEl.textContent = '';
+      if (timestampEl) timestampEl.textContent = '';
+      return;
+    }
+
+    const latest = diagnostics[diagnostics.length - 1];
+    banner.classList.remove('hidden');
+    detailEl.textContent = `${latest.endpoint}: ${latest.message}`;
+    if (timestampEl) {
+      try {
+        const when = new Date(latest.timestamp);
+        timestampEl.textContent = `Last fallback at ${when.toLocaleString()}`;
+      } catch {
+        timestampEl.textContent = latest.timestamp ? `Last fallback at ${latest.timestamp}` : '';
+      }
+    }
+  }
+
+  renderDiagnosticsBanner();
+
+  window.addEventListener('backend:diagnostic', (event) => {
+    renderDiagnosticsBanner();
+    if (event && event.detail) {
+      const now = Date.now();
+      if (now - diagnosticsToastCooldown > 4000) {
+        diagnosticsToastCooldown = now;
+        showToast('Using cached demo data (backend unavailable)');
+      }
+    }
+  });
+
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      BackendAdapter.clearDiagnostics();
+      renderDiagnosticsBanner();
+    });
+  }
 }
 
 function formatCurrency(value, currency = 'USD') {
@@ -305,14 +442,18 @@ async function boot() {
   } catch (err) {
     console.error('Failed to load config:', err);
   }
-  
+
   await setupConnectButton();
-  
+
+  setupDiagnosticsBanner();
+
   if (document.readyState !== 'loading') {
+    setupDiagnosticsBanner();
     await init();
     setupRefreshButton();
   } else {
     document.addEventListener('DOMContentLoaded', async () => {
+      setupDiagnosticsBanner();
       await init();
       setupRefreshButton();
     });
