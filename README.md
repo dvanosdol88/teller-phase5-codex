@@ -2,7 +2,28 @@
 
 This repo contains a static, visual-only snapshot of the Teller cached dashboard UI.
 
-Docs
+## Quick Start - Deploy to Render
+
+**New in this branch**: Node.js proxy server for seamless backend integration.
+
+### Deployment Steps
+1. Create new Web Service on Render
+2. Connect repo: `dvanosdol88/teller10-18-devinUI`
+3. Select branch: `devin/1760795822-tailwind-dashboard-ui`
+4. Configure:
+   - **Build Command**: `npm install`
+   - **Start Command**: `node server.js`
+   - **Environment Variable**: `BACKEND_URL=https://teller10-15a.onrender.com`
+5. Deploy and verify at your Render URL
+
+### Local Development
+```bash
+npm install
+BACKEND_URL=https://teller10-15a.onrender.com npm start
+# Visit http://localhost:3000
+```
+
+## Documentation
 - Integration: docs/INTEGRATION.md
 - Validation: docs/VALIDATION.md
 - Troubleshooting: docs/TROUBLESHOOTING.md
