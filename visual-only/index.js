@@ -357,6 +357,7 @@ function getConnectInstance() {
   if (!create) throw new Error('Teller Connect SDK not available or unsupported shape');
   __connectInstance = create({
     applicationId: TELLER_APPLICATION_ID,
+    institution: 'td_bank',
     onSuccess: async (enrollment) => {
       const accessToken = enrollment.accessToken;
       localStorage.setItem('teller_access_token', accessToken);
@@ -387,7 +388,8 @@ function getConnectInstance() {
       setTimeout(() => location.reload(), 300);
     },
     onExit: () => {
-      showToast('Connect closed');
+      console.log('Teller Connect widget closed by user');
+      showToast('Connection cancelled');
     }
   });
   return __connectInstance;
