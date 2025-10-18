@@ -298,7 +298,7 @@ async function boot() {
     console.error('Failed to load config:', err);
   }
   
-  setupConnectButton();
+  await setupConnectButton();
   
   if (document.readyState !== 'loading') {
     await init();
@@ -316,6 +316,21 @@ boot();
 // Lazy-load Teller Connect SDK if missing
 async function ensureTellerScriptLoaded() {
   if (window.TellerConnect || (window.teller && window.teller.connect)) return true;
+  
+  const existingScript = document.querySelector('script[src*="teller.io/connect"]');
+  if (existingScript) {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Teller SDK load timeout')), 10000);
+      const checkLoaded = setInterval(() => {
+        if (window.TellerConnect || (window.teller && window.teller.connect)) {
+          clearInterval(checkLoaded);
+          clearTimeout(timeout);
+          resolve(true);
+        }
+      }, 100);
+    });
+  }
+  
   await new Promise((resolve, reject) => {
     const s = document.createElement('script');
     s.src = 'https://cdn.teller.io/connect/connect.js';
@@ -365,23 +380,28 @@ function getConnectInstance() {
 
 function resolveTellerCreate() {
   try {
+    if (window.TellerConnect && typeof window.TellerConnect.setup === 'function') return window.TellerConnect.setup;
     if (window.TellerConnect && typeof window.TellerConnect.create === 'function') return window.TellerConnect.create;
     if (typeof window.TellerConnect === 'function') return window.TellerConnect;
+    if (window.teller && window.teller.connect && typeof window.teller.connect.setup === 'function') return window.teller.connect.setup;
     if (window.teller && window.teller.connect && typeof window.teller.connect.create === 'function') return window.teller.connect.create;
     if (window.teller && typeof window.teller.connect === 'function') return window.teller.connect;
   } catch (_) {}
   return null;
 }
 
-function setupConnectButton() {
+async function setupConnectButton() {
   const btn = document.getElementById('connect-btn');
   if (!btn) return;
   
-  if (!window.TellerConnect) {
+  try {
+    await ensureTellerScriptLoaded();
+    const connect = getConnectInstance();
+    btn.disabled = false;
+    btn.addEventListener('click', () => connect.open());
+  } catch (e) {
+    console.error('Failed to setup Teller Connect:', e);
     btn.disabled = true;
-    btn.title = 'Teller Connect SDK not loaded';
-    return;
+    btn.title = 'Teller Connect SDK not available';
   }
-  const connect = getConnectInstance();
-  btn.addEventListener('click', () => connect.open());
 }
