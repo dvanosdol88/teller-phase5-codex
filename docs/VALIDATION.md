@@ -223,6 +223,101 @@ Backend must return from `/api/config`:
 
 **Expected Result**: When token is set, all backend requests include `Authorization: Bearer {token}` header. Token is never persisted to storage.
 
+## Scenario 5: Manual Data Feature
+
+**Purpose**: Verify manual data (rent roll) functionality works correctly.
+
+**Configuration**:
+- Default settings (backend disabled) for UI-only testing
+- Or backend enabled for full integration testing
+
+**Steps**:
+
+1. Serve the UI
+2. Open the page in your browser
+3. Flip any account card to see the back side
+4. Click the "Manual Data" tab
+
+**Verification Checklist (Backend Disabled)**:
+
+- [ ] **UI Elements**:
+  - "Manual Data" tab button is visible on card back
+  - Clicking "Manual Data" tab switches view from Transactions
+  - "Rent Roll" label and value displayed (shows "—" when no data)
+  - "Last updated" timestamp displayed (shows "—" when no data)
+  - "Edit" button is visible
+
+- [ ] **Modal Interaction**:
+  - Click "Edit" button
+  - Modal opens with title "Edit Manual Data"
+  - Input field labeled "Rent Roll ($)" is visible
+  - Input field has placeholder "Enter amount"
+  - Three buttons visible: "Cancel", "Clear", "Save"
+
+- [ ] **Input Validation**:
+  - Enter a valid number (e.g., "2500")
+  - Click "Save"
+  - Toast message appears: "Backend not enabled"
+  - Modal remains open (expected behavior when backend disabled)
+
+- [ ] **Modal Close**:
+  - Click "Cancel" button - modal closes
+  - Click "×" close button - modal closes
+  - Click outside modal (overlay) - modal closes
+
+**Verification Checklist (Backend Enabled)**:
+
+Prerequisites:
+- Backend must be running with manual_data table migrated
+- Set `window.FEATURE_USE_BACKEND = true` and reload
+
+- [ ] **Data Loading**:
+  - GET `/api/db/accounts/{id}/manual-data` returns 200 OK
+  - Response format: `{"account_id": "...", "rent_roll": null, "updated_at": null}`
+  - UI displays "—" for rent_roll when null
+  - UI displays "—" for updated_at when null
+
+- [ ] **Data Saving**:
+  - Click "Edit" button on any card
+  - Enter valid amount (e.g., "2500")
+  - Click "Save"
+  - PUT `/api/db/accounts/{id}/manual-data` request sent
+  - Request body: `{"rent_roll": 2500}`
+  - Response returns 200 OK with updated data
+  - Toast message: "Manual data saved successfully"
+  - Modal closes automatically
+  - UI refreshes and displays new rent_roll value
+  - "Last updated" timestamp shows current time
+
+- [ ] **Data Clearing**:
+  - Click "Edit" button on card with existing rent_roll
+  - Click "Clear" button
+  - Confirmation dialog appears
+  - Confirm the action
+  - PUT request sent with `{"rent_roll": null}`
+  - Toast message: "Manual data saved successfully"
+  - UI updates to show "—" for rent_roll
+
+- [ ] **Input Validation**:
+  - Enter empty value and click "Save" - shows "Please enter a value or use Clear"
+  - Enter negative number - shows "Please enter a valid non-negative number"
+  - Enter non-numeric text - shows validation error
+  - Backend rejects invalid values with 400 Bad Request
+
+- [ ] **Error Handling**:
+  - Disconnect backend while UI is open
+  - Try to save manual data
+  - Toast shows error message
+  - Modal remains open (user can retry)
+  - UI remains stable, no console errors
+
+- [ ] **Time Display**:
+  - After saving, "Last updated" shows relative time (e.g., "just now", "2 minutes ago")
+  - Timestamp updates correctly on subsequent saves
+  - Format is human-readable
+
+**Expected Result**: Manual data feature works correctly in both backend-disabled (shows appropriate message) and backend-enabled (full CRUD operations) modes. All validation and error handling works as expected.
+
 ## UI Parity Checks
 
 These checks should be performed in all scenarios to ensure UI consistency:
