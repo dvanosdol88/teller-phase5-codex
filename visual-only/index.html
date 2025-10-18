@@ -140,8 +140,8 @@
     <main class="container mx-auto px-6 py-12">
 
         <section class="text-center mb-16">
-            <h2 class="text-4xl font-bold text-slate-800 mb-4">Interactive Financial Flow</h2>
-            <p class="max-w-3xl mx-auto text-lg text-slate-600">This dashboard visualizes the financial structure of your LLC. Click on any account to expand its details, view transactions, and manage manual data.</p>
+            <h2 class="text-4xl font-bold text-slate-800 mb-4" style="color: var(--text-primary);">Interactive Financial Flow</h2>
+            <p class="max-w-3xl mx-auto text-lg text-slate-600" style="color: var(--text-secondary);">This dashboard visualizes the financial structure of your LLC. Click on any account to expand its details, view transactions, and manage manual data.</p>
         </section>
 
         <section id="dashboard" class="mb-16 relative">
@@ -173,19 +173,19 @@
 
                 <!-- LLC Assets and Liabilities -->
                 <div class="lg:col-span-2 text-center">
-                    <h3 class="text-xl font-bold text-slate-800 mb-4">672 Elm St., LLC</h3>
-                    <div class="bg-white p-6 rounded-xl shadow-lg border border-slate-200">
+                    <h3 class="text-xl font-bold text-slate-800 mb-4" style="color: var(--text-primary);">672 Elm St., LLC</h3>
+                    <div class="bg-white p-6 rounded-xl shadow-lg border border-slate-200" style="background-color: var(--bg-secondary); border-color: var(--border-color);">
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                             <!-- Assets Column -->
                             <div>
-                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center">Assets</h4>
+                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center" style="color: var(--text-primary);">Assets</h4>
                                 <div id="assets-container" class="space-y-4">
                                     <!-- Asset accounts will be rendered here -->
                                 </div>
                             </div>
                             <!-- Liabilities Column -->
                             <div>
-                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center">Liabilities</h4>
+                                <h4 class="font-bold text-slate-800 text-xl mb-4 text-center" style="color: var(--text-primary);">Liabilities</h4>
                                 <div id="liabilities-container" class="space-y-4">
                                     <!-- Liability accounts will be rendered here -->
                                 </div>
@@ -204,8 +204,8 @@
 
         <div id="empty-state" class="text-center py-16 hidden">
             <div class="text-6xl mb-4">💳</div>
-            <h3 class="text-2xl font-bold text-slate-800 mb-2">No accounts connected</h3>
-            <p class="text-slate-600">Connect your bank account to view your financial data.</p>
+            <h3 class="text-2xl font-bold text-slate-800 mb-2" style="color: var(--text-primary);">No accounts connected</h3>
+            <p class="text-slate-600" style="color: var(--text-secondary);">Connect your bank account to view your financial data.</p>
         </div>
 
     </main>
@@ -213,19 +213,19 @@
     <!-- Account Details Modal -->
     <div id="account-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
         <div class="modal-bg fixed inset-0 bg-black bg-opacity-50"></div>
-        <div class="modal-content bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl relative flex flex-col transform scale-95 opacity-0">
-            <div class="flex items-center justify-between p-6 border-b border-slate-200">
+        <div class="modal-content bg-white w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl relative flex flex-col transform scale-95 opacity-0" style="background-color: var(--bg-secondary);">
+            <div class="flex items-center justify-between p-6 border-b border-slate-200" style="border-color: var(--border-color);">
                 <div>
-                    <h3 id="modal-title" class="text-2xl font-bold text-slate-800">Account Details</h3>
-                    <p id="modal-subtitle" class="text-sm text-slate-500"></p>
+                    <h3 id="modal-title" class="text-2xl font-bold text-slate-800" style="color: var(--text-primary);">Account Details</h3>
+                    <p id="modal-subtitle" class="text-sm text-slate-500" style="color: var(--text-secondary);"></p>
                 </div>
-                <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 text-3xl leading-none">&times;</button>
+                <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 text-3xl leading-none" style="color: var(--text-secondary);">&times;</button>
             </div>
             <div class="flex-grow p-6 overflow-y-auto">
-                <div id="modal-tabs" class="border-b border-slate-200 mb-6 flex space-x-4"></div>
+                <div id="modal-tabs" class="border-b border-slate-200 mb-6 flex space-x-4" style="border-color: var(--border-color);"></div>
                 <div id="modal-tab-content"></div>
             </div>
-            <div id="modal-footer" class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl">
+            <div id="modal-footer" class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl" style="background-color: var(--bg-tertiary); border-color: var(--border-color);">
                 <!-- Footer content will be injected here -->
             </div>
         </div>
@@ -234,18 +234,18 @@
     <!-- Manual Data Edit Modal -->
     <div id="manual-data-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
         <div class="modal-bg fixed inset-0 bg-black bg-opacity-50"></div>
-        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl relative transform scale-95 opacity-0">
-            <div class="flex items-center justify-between p-6 border-b border-slate-200">
-                <h3 class="text-2xl font-bold text-slate-800">Edit Manual Data</h3>
-                <button class="modal-close text-slate-400 hover:text-slate-600 text-3xl leading-none">&times;</button>
+        <div class="modal-content bg-white w-full max-w-md rounded-2xl shadow-2xl relative transform scale-95 opacity-0" style="background-color: var(--bg-secondary);">
+            <div class="flex items-center justify-between p-6 border-b border-slate-200" style="border-color: var(--border-color);">
+                <h3 class="text-2xl font-bold text-slate-800" style="color: var(--text-primary);">Edit Manual Data</h3>
+                <button class="modal-close text-slate-400 hover:text-slate-600 text-3xl leading-none" style="color: var(--text-secondary);">&times;</button>
             </div>
             <div class="p-6">
                 <div class="mb-4">
-                    <label for="rent-roll-input" class="block text-sm font-medium text-slate-700 mb-2">Rent Roll ($)</label>
-                    <input type="number" id="rent-roll-input" step="0.01" min="0" placeholder="Enter amount" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <label for="rent-roll-input" class="block text-sm font-medium text-slate-700 mb-2" style="color: var(--text-secondary);">Rent Roll ($)</label>
+                    <input type="number" id="rent-roll-input" step="0.01" min="0" placeholder="Enter amount" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" style="background-color: var(--bg-tertiary); border-color: var(--border-color); color: var(--text-primary);">
                 </div>
             </div>
-            <div class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex justify-end space-x-3">
+            <div class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex justify-end space-x-3" style="background-color: var(--bg-tertiary); border-color: var(--border-color);">
                 <button class="modal-cancel bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Cancel</button>
                 <button class="modal-clear bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Clear</button>
                 <button class="modal-save bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Save</button>
