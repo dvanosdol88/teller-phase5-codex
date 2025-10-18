@@ -5,6 +5,209 @@ window.__manualDataBound = false;
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
 console.log('[UI] build:', new Date().toISOString());
 
+const manualDataStore = new Map();
+let manualDataSummaryAccountIds = new Set();
+let lastComputedTotals = { assets: 0, liabilities: 0 };
+
+const manualDataUI = {
+  bound: false,
+  modal: null,
+  overlay: null,
+  content: null,
+  rentRollInput: null,
+  saveButton: null,
+  clearButton: null,
+  cancelButton: null,
+  closeButtons: [],
+  state: {
+    accountId: null,
+    currency: 'USD',
+    touched: false,
+    isSaving: false,
+    isClearing: false,
+    isFetching: false,
+    lastKnownRentRoll: null,
+    lastKnownUpdatedAt: null,
+  },
+};
+
+function setManualDataSummaryAccounts(accountIds) {
+  if (Array.isArray(accountIds)) {
+    manualDataSummaryAccountIds = new Set(accountIds);
+  } else {
+    manualDataSummaryAccountIds = new Set();
+  }
+}
+
+function getManualDataFromStore(accountId) {
+  if (!accountId) return null;
+  return manualDataStore.get(accountId) || null;
+}
+
+function manualDataStoreHas(accountId) {
+  return manualDataStore.has(accountId);
+}
+
+function manualDataStoreValues() {
+  return Array.from(manualDataStore.values());
+}
+
+function normalizeManualDataRecord(accountId, data) {
+  const base = {
+    account_id: accountId || (data && typeof data.account_id === 'string' ? data.account_id : undefined) || accountId,
+    rent_roll: null,
+    updated_at: null,
+  };
+
+  if (data && typeof data === 'object') {
+    if (Object.prototype.hasOwnProperty.call(data, 'rent_roll') && data.rent_roll !== null && data.rent_roll !== undefined && data.rent_roll !== '') {
+      const numeric = Number(data.rent_roll);
+      if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+        base.rent_roll = numeric;
+      }
+    } else if (data && typeof data.rent_roll === 'number') {
+      base.rent_roll = data.rent_roll;
+    }
+
+    if (typeof data.updated_at === 'string') {
+      base.updated_at = data.updated_at;
+    } else if (data.updated_at instanceof Date && !Number.isNaN(data.updated_at.valueOf())) {
+      base.updated_at = data.updated_at.toISOString();
+    }
+  }
+
+  if (base.rent_roll === undefined) base.rent_roll = null;
+  if (base.updated_at === undefined) base.updated_at = null;
+
+  return base;
+}
+
+function updateManualDataStore(accountId, payload, options = {}) {
+  const normalized = normalizeManualDataRecord(accountId, payload || {});
+  const previous = manualDataStore.get(accountId);
+  const changed = !previous || previous.rent_roll !== normalized.rent_roll || previous.updated_at !== normalized.updated_at;
+
+  manualDataStore.set(accountId, normalized);
+
+  if (changed && !options.skipNotify) {
+    notifyManualDataListeners(accountId);
+  }
+
+  return normalized;
+}
+
+function clearManualDataFromStore(accountId, options = {}) {
+  return updateManualDataStore(accountId, { account_id: accountId, rent_roll: null, updated_at: null }, options);
+}
+
+function notifyManualDataListeners(accountId) {
+  const record = getManualDataFromStore(accountId);
+  rerenderManualDataTab(accountId, record);
+  dispatchManualDataEvent(accountId, record);
+  recalculateManualDataSummaries();
+  refreshManualDataModalState(accountId, record);
+}
+
+function rerenderManualDataTab(accountId, manualData) {
+  if (!accountId) return;
+  try {
+    if (window.__manualDataBinder && typeof window.__manualDataBinder.renderTab === 'function') {
+      window.__manualDataBinder.renderTab(accountId, manualData);
+      return;
+    }
+    if (window.__manualDataBinder && typeof window.__manualDataBinder.render === 'function') {
+      window.__manualDataBinder.render(accountId, manualData);
+      return;
+    }
+    if (typeof window.renderManualDataTab === 'function') {
+      window.renderManualDataTab(accountId, manualData);
+    }
+  } catch (err) {
+    console.error('[ManualData] Failed to rerender manual data tab:', err);
+  }
+}
+
+function dispatchManualDataEvent(accountId, manualData) {
+  try {
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      window.dispatchEvent(new CustomEvent('manual-data:updated', { detail: { accountId, manualData } }));
+    }
+  } catch (err) {
+    console.error('[ManualData] Failed to dispatch manual data event:', err);
+  }
+}
+
+function recalculateManualDataSummaries() {
+  const rentRollValueEl = document.getElementById('rent-roll-total');
+  if (rentRollValueEl) {
+    let total = 0;
+    manualDataSummaryAccountIds.forEach((accountId) => {
+      const record = manualDataStore.get(accountId);
+      if (record && record.rent_roll !== null && record.rent_roll !== undefined && !Number.isNaN(Number(record.rent_roll))) {
+        total += Number(record.rent_roll);
+      }
+    });
+    rentRollValueEl.textContent = formatCurrency(total);
+  }
+
+  const totalEquityEl = document.getElementById('total-equity-balance');
+  if (totalEquityEl) {
+    const totalEquity = (lastComputedTotals?.assets || 0) - (lastComputedTotals?.liabilities || 0);
+    totalEquityEl.textContent = formatCurrency(totalEquity);
+  }
+}
+
+function manualRentRollToInputValue(value) {
+  if (value === null || value === undefined || value === '') return '';
+  const numeric = Number(value);
+  if (Number.isNaN(numeric) || !Number.isFinite(numeric)) return '';
+  return `${numeric}`;
+}
+
+function refreshManualDataModalState(accountId, manualDataOverride) {
+  if (!manualDataUI.modal) return;
+  if (!manualDataUI.state.accountId || manualDataUI.state.accountId !== accountId) return;
+
+  const record = manualDataOverride || getManualDataFromStore(accountId);
+  manualDataUI.state.lastKnownRentRoll = record?.rent_roll ?? null;
+  manualDataUI.state.lastKnownUpdatedAt = record?.updated_at ?? null;
+
+  if (manualDataUI.rentRollInput && !manualDataUI.state.touched) {
+    manualDataUI.rentRollInput.value = manualRentRollToInputValue(record?.rent_roll);
+  }
+
+  refreshManualDataModalButtons();
+}
+
+function refreshManualDataModalButtons() {
+  const { saveButton, clearButton, rentRollInput } = manualDataUI;
+  const { isSaving, isClearing, isFetching, lastKnownRentRoll } = manualDataUI.state;
+
+  if (saveButton) {
+    saveButton.disabled = Boolean(isSaving || isClearing || isFetching);
+    saveButton.textContent = isSaving ? 'Saving…' : 'Save';
+  }
+
+  if (clearButton) {
+    const hasValue = lastKnownRentRoll !== null && lastKnownRentRoll !== undefined && !Number.isNaN(Number(lastKnownRentRoll));
+    clearButton.disabled = Boolean(isSaving || isClearing || isFetching || !hasValue);
+    clearButton.textContent = isClearing ? 'Clearing…' : 'Clear';
+  }
+
+  if (rentRollInput) {
+    rentRollInput.disabled = Boolean(isSaving || isClearing || isFetching);
+  }
+}
+
+window.__manualDataStore = {
+  get: getManualDataFromStore,
+  set: (accountId, payload) => updateManualDataStore(accountId, payload),
+  clear: (accountId) => clearManualDataFromStore(accountId),
+  has: manualDataStoreHas,
+  values: manualDataStoreValues,
+  setSummaryAccounts: setManualDataSummaryAccounts,
+};
+
 // BackendAdapter - handles data fetching with fallback to mock data
 const BackendAdapter = (() => {
   const DIAGNOSTICS_STORAGE_KEY = 'backend_diagnostics_v1';
@@ -160,18 +363,83 @@ const BackendAdapter = (() => {
     }
   }
 
-  async function fetchManualData(accountId) {
-    if (!isBackendEnabled()) return MOCK_MANUAL_DATA[accountId] || { account_id: accountId, rent_roll: null, updated_at: null };
+  async function fetchManualData(accountId, options = {}) {
+    const opts = options || {};
+    const forceRefresh = Boolean(opts.force || opts.forceRefresh);
+    const skipNotify = Boolean(opts.skipNotify);
+
+    if (!forceRefresh) {
+      const cached = getManualDataFromStore(accountId);
+      if (cached) {
+        return cached;
+      }
+    }
+
+    if (!isBackendEnabled()) {
+      const fallback = MOCK_MANUAL_DATA[accountId] || { account_id: accountId, rent_roll: null, updated_at: null };
+      return updateManualDataStore(accountId, fallback, { skipNotify });
+    }
+
     try {
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, { headers: headers() });
       if (!resp.ok) {
-        recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, new Error(`manual data request failed with status ${resp.status}`));
-        return { account_id: accountId, rent_roll: null, updated_at: null };
+        const error = new Error(`manual data request failed with status ${resp.status}`);
+        recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, error);
+        const fallback = { account_id: accountId, rent_roll: null, updated_at: null };
+        return updateManualDataStore(accountId, fallback, { skipNotify });
       }
-      return await resp.json();
+      const payload = await resp.json().catch(() => ({ account_id: accountId, rent_roll: null, updated_at: null }));
+      return updateManualDataStore(accountId, payload, { skipNotify });
     } catch (err) {
       recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, err);
-      return { account_id: accountId, rent_roll: null, updated_at: null };
+      const fallback = { account_id: accountId, rent_roll: null, updated_at: null };
+      return updateManualDataStore(accountId, fallback, { skipNotify });
+    }
+  }
+
+  async function persistManualData(accountId, rentRollValue) {
+    if (!isBackendEnabled()) {
+      throw new Error('Backend not enabled');
+    }
+
+    const requestHeaders = { ...headers(), 'Content-Type': 'application/json' };
+    const body = JSON.stringify({ rent_roll: rentRollValue });
+
+    try {
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, {
+        method: 'PUT',
+        headers: requestHeaders,
+        body,
+      });
+
+      if (!resp.ok) {
+        let message = `manual data request failed with status ${resp.status}`;
+        try {
+          const errorPayload = await resp.json();
+          if (errorPayload && typeof errorPayload.message === 'string') {
+            message = errorPayload.message;
+          } else if (errorPayload && typeof errorPayload.error === 'string') {
+            message = errorPayload.error;
+          }
+        } catch (_) {}
+        throw new Error(message);
+      }
+
+      let responseData = null;
+      try {
+        responseData = await resp.json();
+      } catch (_) {}
+
+      const normalized = updateManualDataStore(accountId, responseData || {
+        account_id: accountId,
+        rent_roll: rentRollValue ?? null,
+        updated_at: (responseData && responseData.updated_at) || new Date().toISOString(),
+      });
+
+      return normalized;
+    } catch (err) {
+      console.error(`[ManualData] Failed to persist manual data for ${accountId}:`, err);
+      throw err;
     }
   }
 
@@ -182,6 +450,8 @@ const BackendAdapter = (() => {
     fetchAccounts,
     fetchCachedBalance,
     fetchManualData,
+    saveManualData: (accountId, rentRoll) => persistManualData(accountId, rentRoll),
+    clearManualData: (accountId) => persistManualData(accountId, null),
     getDiagnostics,
     clearDiagnostics
   };
@@ -218,6 +488,251 @@ function showToast(message) {
   window.clearTimeout(showToast._t);
   showToast._t = window.setTimeout(() => el.classList.add('hidden'), 2200);
 }
+
+function bindManualDataUI() {
+  if (manualDataUI.bound) return;
+
+  const modal = document.getElementById('manual-data-modal');
+  const rentRollInput = document.getElementById('rent-roll-input');
+
+  if (!modal || !rentRollInput) {
+    console.warn('[ManualData] Manual data modal elements not found.');
+    return;
+  }
+
+  manualDataUI.modal = modal;
+  manualDataUI.overlay = modal.querySelector('.modal-bg');
+  manualDataUI.content = modal.querySelector('.modal-content');
+  manualDataUI.rentRollInput = rentRollInput;
+  manualDataUI.saveButton = modal.querySelector('.modal-save');
+  manualDataUI.clearButton = modal.querySelector('.modal-clear');
+  manualDataUI.cancelButton = modal.querySelector('.modal-cancel');
+  manualDataUI.closeButtons = Array.from(modal.querySelectorAll('.modal-close'));
+  manualDataUI.bound = true;
+
+  rentRollInput.addEventListener('input', () => {
+    manualDataUI.state.touched = true;
+    refreshManualDataModalButtons();
+  });
+
+  if (manualDataUI.saveButton) {
+    manualDataUI.saveButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      handleManualDataSave();
+    });
+  }
+
+  if (manualDataUI.clearButton) {
+    manualDataUI.clearButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      handleManualDataClear();
+    });
+  }
+
+  if (manualDataUI.cancelButton) {
+    manualDataUI.cancelButton.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeManualDataModal();
+    });
+  }
+
+  manualDataUI.closeButtons.forEach((btn) => {
+    btn.addEventListener('click', (event) => {
+      event.preventDefault();
+      closeManualDataModal();
+    });
+  });
+
+  if (manualDataUI.overlay) {
+    manualDataUI.overlay.addEventListener('click', () => closeManualDataModal());
+  }
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && manualDataUI.modal && !manualDataUI.modal.classList.contains('hidden')) {
+      closeManualDataModal();
+    }
+  });
+
+  window.addEventListener('manual-data:open', (event) => {
+    const detail = event?.detail || {};
+    if (detail && detail.accountId) {
+      openManualDataModal(detail.accountId, detail);
+    }
+  });
+
+  window.openManualDataModal = openManualDataModal;
+  window.closeManualDataModal = closeManualDataModal;
+
+  refreshManualDataModalButtons();
+}
+
+function openManualDataModal(accountId, options = {}) {
+  if (!manualDataUI.modal || !accountId) return;
+
+  const forceRefresh = Boolean(options.force || options.forceRefresh);
+  const existingRecord = getManualDataFromStore(accountId);
+
+  manualDataUI.state.accountId = accountId;
+  manualDataUI.state.currency = options.currency || 'USD';
+  manualDataUI.state.touched = false;
+  manualDataUI.state.isSaving = false;
+  manualDataUI.state.isClearing = false;
+  manualDataUI.state.isFetching = false;
+  manualDataUI.state.lastKnownRentRoll = existingRecord?.rent_roll ?? null;
+  manualDataUI.state.lastKnownUpdatedAt = existingRecord?.updated_at ?? null;
+
+  manualDataUI.modal.classList.remove('hidden');
+  if (manualDataUI.content) {
+    manualDataUI.content.classList.add('opacity-0', 'scale-95');
+    requestAnimationFrame(() => {
+      if (manualDataUI.content) {
+        manualDataUI.content.classList.remove('opacity-0', 'scale-95');
+      }
+    });
+  }
+
+  if (manualDataUI.rentRollInput) {
+    manualDataUI.rentRollInput.value = manualRentRollToInputValue(existingRecord?.rent_roll);
+    try {
+      manualDataUI.rentRollInput.focus({ preventScroll: true });
+      const length = manualDataUI.rentRollInput.value.length;
+      manualDataUI.rentRollInput.setSelectionRange(length, length);
+    } catch (_) {}
+  }
+
+  const needsFetch = forceRefresh || !existingRecord;
+  if (needsFetch && BackendAdapter && typeof BackendAdapter.fetchManualData === 'function') {
+    manualDataUI.state.isFetching = true;
+    refreshManualDataModalButtons();
+    BackendAdapter.fetchManualData(accountId, { force: forceRefresh })
+      .catch((err) => {
+        console.error('[ManualData] Failed to load manual data:', err);
+      })
+      .finally(() => {
+        if (manualDataUI.state.accountId === accountId) {
+          manualDataUI.state.isFetching = false;
+          if (!manualDataUI.state.touched) {
+            const latest = getManualDataFromStore(accountId);
+            manualDataUI.state.lastKnownRentRoll = latest?.rent_roll ?? null;
+            manualDataUI.state.lastKnownUpdatedAt = latest?.updated_at ?? null;
+            if (manualDataUI.rentRollInput) {
+              manualDataUI.rentRollInput.value = manualRentRollToInputValue(latest?.rent_roll);
+            }
+          }
+          refreshManualDataModalButtons();
+        }
+      });
+  } else {
+    refreshManualDataModalButtons();
+  }
+}
+
+function closeManualDataModal() {
+  if (!manualDataUI.modal) return;
+
+  if (manualDataUI.content) {
+    manualDataUI.content.classList.add('opacity-0', 'scale-95');
+  }
+
+  window.setTimeout(() => {
+    if (manualDataUI.modal) {
+      manualDataUI.modal.classList.add('hidden');
+    }
+  }, 160);
+
+  manualDataUI.state.accountId = null;
+  manualDataUI.state.currency = 'USD';
+  manualDataUI.state.touched = false;
+  manualDataUI.state.isSaving = false;
+  manualDataUI.state.isClearing = false;
+  manualDataUI.state.isFetching = false;
+  manualDataUI.state.lastKnownRentRoll = null;
+  manualDataUI.state.lastKnownUpdatedAt = null;
+
+  if (manualDataUI.rentRollInput) {
+    manualDataUI.rentRollInput.value = '';
+  }
+
+  refreshManualDataModalButtons();
+}
+
+async function handleManualDataSave() {
+  const { accountId } = manualDataUI.state;
+  if (!accountId || !manualDataUI.rentRollInput) return;
+
+  const rawValue = manualDataUI.rentRollInput.value.trim();
+  if (rawValue === '') {
+    showToast('Please enter a value or use Clear');
+    manualDataUI.rentRollInput.focus();
+    return;
+  }
+
+  const numeric = Number(rawValue);
+  if (!Number.isFinite(numeric) || Number.isNaN(numeric) || numeric < 0) {
+    showToast('Please enter a valid non-negative number');
+    manualDataUI.rentRollInput.focus();
+    return;
+  }
+
+  if (!BackendAdapter.isBackendEnabled()) {
+    showToast('Backend not enabled');
+    return;
+  }
+
+  manualDataUI.state.isSaving = true;
+  refreshManualDataModalButtons();
+
+  try {
+    await BackendAdapter.saveManualData(accountId, numeric);
+    showToast('Manual data saved successfully');
+    manualDataUI.state.touched = false;
+    closeManualDataModal();
+  } catch (err) {
+    const message = err?.message || 'Failed to save manual data';
+    showToast(message);
+    console.error('[ManualData] Save failed:', err);
+  } finally {
+    manualDataUI.state.isSaving = false;
+    refreshManualDataModalButtons();
+  }
+}
+
+async function handleManualDataClear() {
+  const { accountId, lastKnownRentRoll } = manualDataUI.state;
+  if (!accountId) return;
+
+  if (!BackendAdapter.isBackendEnabled()) {
+    showToast('Backend not enabled');
+    return;
+  }
+
+  if (lastKnownRentRoll === null || lastKnownRentRoll === undefined) {
+    showToast('Nothing to clear');
+    return;
+  }
+
+  const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function' ? window.confirm('Clear manual data for this account?') : true;
+  if (!confirmed) return;
+
+  manualDataUI.state.isClearing = true;
+  refreshManualDataModalButtons();
+
+  try {
+    await BackendAdapter.clearManualData(accountId);
+    showToast('Manual data saved successfully');
+    manualDataUI.state.touched = false;
+    closeManualDataModal();
+  } catch (err) {
+    const message = err?.message || 'Failed to clear manual data';
+    showToast(message);
+    console.error('[ManualData] Clear failed:', err);
+  } finally {
+    manualDataUI.state.isClearing = false;
+    refreshManualDataModalButtons();
+  }
+}
+
+window.bindManualDataUI = bindManualDataUI;
 
 function ensureManualDataBinder() {
   if (!window.FEATURE_MANUAL_DATA || window.__manualDataBound) return;
@@ -384,20 +899,41 @@ async function renderAccountCard(account) {
 }
 
 async function calculateRentRoll(accounts) {
-  let total = 0;
+  if (!Array.isArray(accounts)) return 0;
+
+  const missing = new Set();
   for (const account of accounts) {
-    const manualData = await BackendAdapter.fetchManualData(account.id);
-    if (manualData.rent_roll !== null && manualData.rent_roll !== undefined) {
-      total += Number(manualData.rent_roll);
+    if (!account || !account.id) continue;
+    if (!manualDataStoreHas(account.id)) {
+      missing.add(account.id);
     }
   }
+
+  if (missing.size > 0) {
+    await Promise.all(
+      Array.from(missing).map((accountId) =>
+        BackendAdapter.fetchManualData(accountId).catch((err) => {
+          console.error(`[ManualData] Failed to fetch manual data for ${accountId}:`, err);
+          return null;
+        })
+      )
+    );
+  }
+
+  let total = 0;
+  for (const account of accounts) {
+    const record = getManualDataFromStore(account.id);
+    if (record && record.rent_roll !== null && record.rent_roll !== undefined && !Number.isNaN(Number(record.rent_roll))) {
+      total += Number(record.rent_roll);
+    }
+  }
+
   return total;
 }
 
 async function init() {
   const assetsContainer = document.getElementById('assets-container');
   const liabilitiesContainer = document.getElementById('liabilities-container');
-  const rentRollValue = document.getElementById('rent-roll-total');
   const totalEquityValue = document.getElementById('total-equity-balance');
   
   if (!assetsContainer || !liabilitiesContainer) {
@@ -409,6 +945,7 @@ async function init() {
   liabilitiesContainer.innerHTML = '';
   
   const accounts = await BackendAdapter.fetchAccounts();
+  setManualDataSummaryAccounts((accounts || []).map((account) => account && account.id).filter(Boolean));
   
   let totalAssets = 0;
   let totalLiabilities = 0;
@@ -431,16 +968,16 @@ async function init() {
     }
   }
   
-  const rentRoll = await calculateRentRoll(accounts);
-  if (rentRollValue) {
-    rentRollValue.textContent = formatCurrency(rentRoll);
-  }
-  
+  lastComputedTotals = { assets: totalAssets, liabilities: totalLiabilities };
+
   const totalEquity = totalAssets - totalLiabilities;
   if (totalEquityValue) {
     totalEquityValue.textContent = formatCurrency(totalEquity);
   }
-  
+
+  await calculateRentRoll(accounts);
+  recalculateManualDataSummaries();
+
   showToast('Dashboard loaded');
 }
 
