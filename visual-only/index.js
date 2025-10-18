@@ -2,6 +2,9 @@ window.FEATURE_USE_BACKEND = false;
 window.TEST_BEARER_TOKEN = undefined;
 window.FEATURE_MANUAL_DATA = false;
 window.__manualDataBound = false;
+
+const accountRegistry = new Map();
+const manualDataCache = new Map();
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
 console.log('[UI] build:', new Date().toISOString());
 
@@ -381,7 +384,10 @@ const BackendAdapter = (() => {
     }
 
     try {
-      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, { headers: headers() });
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, {
+        headers: headers(),
+        signal
+      });
       if (!resp.ok) {
         const error = new Error(`manual data request failed with status ${resp.status}`);
         recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, error);
@@ -441,6 +447,34 @@ const BackendAdapter = (() => {
       console.error(`[ManualData] Failed to persist manual data for ${accountId}:`, err);
       throw err;
     }
+    const payload = { rent_roll: body?.rent_roll ?? null };
+    const requestInit = {
+      method: 'PUT',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal
+    };
+
+    const endpoint = `${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`;
+    const resp = await fetch(endpoint, requestInit);
+    const requestId = resp.headers?.get?.('x-request-id') || resp.headers?.get?.('X-Request-Id') || null;
+    if (!resp.ok) {
+      let detail;
+      try {
+        detail = await resp.json();
+      } catch (_) {
+        detail = undefined;
+      }
+      const error = new Error(detail?.message || `Failed to update manual data (status ${resp.status})`);
+      error.status = resp.status;
+      error.requestId = requestId;
+      error.body = detail;
+      throw error;
+    }
+
+    const data = await resp.json();
+    updateManualDataCache(accountId, data);
+    return { data, requestId };
   }
 
   return {
@@ -479,6 +513,30 @@ const MOCK_MANUAL_DATA = {
   acc_llc_checking: { account_id: 'acc_llc_checking', rent_roll: 2400.00, updated_at: new Date().toISOString() },
   acc_llc_savings: { account_id: 'acc_llc_savings', rent_roll: null, updated_at: null }
 };
+
+function getManualDataFromCache(accountId) {
+  if (!accountId) return undefined;
+  return manualDataCache.get(accountId);
+}
+
+function updateManualDataCache(accountId, data, currency) {
+  if (!accountId) return;
+  if (!data) {
+    manualDataCache.delete(accountId);
+    return;
+  }
+  const normalized = {
+    account_id: data.account_id || accountId,
+    rent_roll: data.rent_roll != null && !Number.isNaN(Number(data.rent_roll)) ? Number(data.rent_roll) : null,
+    updated_at: data.updated_at || null,
+    currency: data.currency || currency || (manualDataCache.get(accountId)?.currency) || 'USD'
+  };
+  manualDataCache.set(accountId, normalized);
+}
+
+function clearManualDataCache() {
+  manualDataCache.clear();
+}
 
 function showToast(message) {
   const el = document.getElementById('toast');
@@ -935,15 +993,17 @@ async function init() {
   const assetsContainer = document.getElementById('assets-container');
   const liabilitiesContainer = document.getElementById('liabilities-container');
   const totalEquityValue = document.getElementById('total-equity-balance');
-  
+
   if (!assetsContainer || !liabilitiesContainer) {
     console.error('Required containers not found');
     return;
   }
-  
+
   assetsContainer.innerHTML = '';
   liabilitiesContainer.innerHTML = '';
-  
+  accountRegistry.clear();
+  clearManualDataCache();
+
   const accounts = await BackendAdapter.fetchAccounts();
   setManualDataSummaryAccounts((accounts || []).map((account) => account && account.id).filter(Boolean));
   
@@ -958,7 +1018,8 @@ async function init() {
     }
     
     const { card, balance } = await renderAccountCard(account);
-    
+    accountRegistry.set(account.id, { ...account, balance });
+
     if (category === 'asset') {
       assetsContainer.appendChild(card);
       totalAssets += balance;
