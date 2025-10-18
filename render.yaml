@@ -1,0 +1,10 @@
+services:
+  - type: static_site
+    name: teller10-18-devinUI
+    repo: https://github.com/dvanosdol88/teller10-18-devinUI
+    branch: main
+    buildCommand: ""
+    staticPublishPath: visual-only
+    autoDeploy: true
+    pullRequestPreviewsEnabled: false
+    plan: free
