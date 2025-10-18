@@ -357,14 +357,17 @@ async function renderAccountCard(account) {
   
   const card = document.createElement('div');
   card.className = 'bg-slate-50 p-4 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors cursor-pointer';
+  card.style.cssText = 'background-color: var(--bg-tertiary); border-color: var(--border-color);';
   card.dataset.accountId = account.id;
   
   const nameEl = document.createElement('h5');
   nameEl.className = 'font-semibold text-slate-800 mb-1';
+  nameEl.style.color = 'var(--text-primary)';
   nameEl.textContent = account.name || 'Account';
   
   const balanceEl = document.createElement('p');
   balanceEl.className = 'text-lg font-bold text-slate-900';
+  balanceEl.style.color = 'var(--text-primary)';
   balanceEl.textContent = formatCurrency(balanceValue, account.currency);
   
   const subtitleParts = [];
@@ -374,6 +377,7 @@ async function renderAccountCard(account) {
   if (subtitleParts.length > 0) {
     const subtitleEl = document.createElement('p');
     subtitleEl.className = 'text-xs text-slate-500 mt-1';
+    subtitleEl.style.color = 'var(--text-secondary)';
     subtitleEl.textContent = subtitleParts.join(' · ');
     card.append(nameEl, balanceEl, subtitleEl);
   } else {
