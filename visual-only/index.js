@@ -384,10 +384,12 @@ const BackendAdapter = (() => {
     }
 
     try {
-      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, {
-        headers: headers(),
-        signal
-      });
+      const requestInit = { headers: headers() };
+      if (opts.signal) {
+        requestInit.signal = opts.signal;
+      }
+
+      const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, requestInit);
       if (!resp.ok) {
         const error = new Error(`manual data request failed with status ${resp.status}`);
         recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, error);
@@ -447,34 +449,6 @@ const BackendAdapter = (() => {
       console.error(`[ManualData] Failed to persist manual data for ${accountId}:`, err);
       throw err;
     }
-    const payload = { rent_roll: body?.rent_roll ?? null };
-    const requestInit = {
-      method: 'PUT',
-      headers: { ...headers(), 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal
-    };
-
-    const endpoint = `${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`;
-    const resp = await fetch(endpoint, requestInit);
-    const requestId = resp.headers?.get?.('x-request-id') || resp.headers?.get?.('X-Request-Id') || null;
-    if (!resp.ok) {
-      let detail;
-      try {
-        detail = await resp.json();
-      } catch (_) {
-        detail = undefined;
-      }
-      const error = new Error(detail?.message || `Failed to update manual data (status ${resp.status})`);
-      error.status = resp.status;
-      error.requestId = requestId;
-      error.body = detail;
-      throw error;
-    }
-
-    const data = await resp.json();
-    updateManualDataCache(accountId, data);
-    return { data, requestId };
   }
 
   return {
