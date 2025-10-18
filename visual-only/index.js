@@ -357,24 +357,30 @@ function getConnectInstance() {
   if (!create) throw new Error('Teller Connect SDK not available or unsupported shape');
   __connectInstance = create({
     applicationId: TELLER_APPLICATION_ID,
-    onSuccess: async ({ accessToken }) => {
+    onSuccess: async (enrollment) => {
+      const accessToken = enrollment.accessToken;
       localStorage.setItem('teller_access_token', accessToken);
       window.TEST_BEARER_TOKEN = accessToken;
       BackendAdapter.setBearerToken(accessToken);
       window.FEATURE_USE_BACKEND = true;
       
       try {
-        const resp = await fetch('/api/connect/token', {
+        const resp = await fetch('/api/enrollments', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ access_token: accessToken })
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ enrollment })
         });
         if (resp && resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          console.log('Token posted to backend successfully');
+          console.log('Enrollment posted to backend successfully', data);
+        } else {
+          console.error('Failed to post enrollment:', resp.status, resp.statusText);
         }
       } catch (e) {
-        console.log('Backend token endpoint not available, using direct token');
+        console.error('Backend enrollment endpoint error:', e);
       }
       
       showToast('Connected. Reloading...');
