@@ -314,7 +314,11 @@ async function ensureTellerScriptLoaded() {
 let __connectInstance;
 function getConnectInstance() {
   if (__connectInstance) return __connectInstance;
-  __connectInstance = window.TellerConnect({
+  const TC = window.TellerConnect;
+  if (!TC) throw new Error('TellerConnect SDK not available');
+  const create = typeof TC.create === 'function' ? TC.create : (typeof TC === 'function' ? TC : null);
+  if (!create) throw new Error('TellerConnect SDK loaded but create function not found');
+  __connectInstance = create({
     applicationId: TELLER_APPLICATION_ID,
     onSuccess: async ({ accessToken }) => {
       try {
