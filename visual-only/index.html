@@ -9,18 +9,57 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --bg-primary: #F8FAFC;
+            --bg-secondary: #FFFFFF;
+            --bg-tertiary: #F1F5F9;
+            --text-primary: #334155;
+            --text-secondary: #64748B;
+            --border-color: #E2E8F0;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+            --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        
+        body.dark-mode {
+            --bg-primary: #0F172A;
+            --bg-secondary: #1E293B;
+            --bg-tertiary: #334155;
+            --text-primary: #F1F5F9;
+            --text-secondary: #94A3B8;
+            --border-color: #334155;
+            --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3);
+            --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.3), 0 8px 10px -6px rgb(0 0 0 / 0.3);
+        }
+        
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #F8FAFC;
-            color: #334155;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            transition: background-color 0.3s ease, color 0.3s ease;
         }
+        
+        .theme-toggle {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1.25rem;
+        }
+        
+        .theme-toggle:hover {
+            opacity: 0.8;
+        }
+        
         .account-card {
             transition: all 0.3s ease;
             cursor: pointer;
         }
         .account-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+            box-shadow: var(--shadow-hover);
         }
         .modal-bg {
             transition: opacity 0.3s ease;
@@ -66,15 +105,20 @@
 </head>
 <body class="antialiased">
 
-    <header class="bg-white shadow-sm sticky top-0 z-40">
+    <header class="bg-white shadow-sm sticky top-0 z-40" style="background-color: var(--bg-secondary); box-shadow: var(--shadow);">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
-            <h1 class="text-xl font-bold text-slate-800">LLC Financial Dashboard</h1>
+            <h1 class="text-xl font-bold text-slate-800" style="color: var(--text-primary);">LLC Financial Dashboard</h1>
             <div class="hidden md:flex space-x-6 items-center">
-                <a href="#dashboard" class="text-slate-600 hover:text-slate-900">Dashboard</a>
+                <a href="#dashboard" class="text-slate-600 hover:text-slate-900" style="color: var(--text-secondary);">Dashboard</a>
                 <button id="refresh-data-btn" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">🔄 Refresh Data</button>
                 <button id="connect-btn" class="bg-emerald-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors">🔗 Connect Bank</button>
             </div>
         </nav>
+        <div class="container mx-auto px-6 pb-3">
+            <button id="theme-toggle" class="theme-toggle" title="Toggle dark mode">
+                <span id="theme-icon">🌙</span>
+            </button>
+        </div>
     </header>
 
     <main class="container mx-auto px-6 py-12">
