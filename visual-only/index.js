@@ -6,7 +6,9 @@ window.__manualDataBound = false;
 const accountRegistry = new Map();
 const manualDataCache = new Map();
 const TELLER_APPLICATION_ID = 'app_pjnkt3k3flo2jacqo2000';
-console.log('[UI] build:', new Date().toISOString());
+const BUILD_VERSION = '2025-10-19T00:00:00Z';
+console.log('[UI] build version:', BUILD_VERSION);
+console.log('[UI] load time:', new Date().toISOString());
 
 const manualDataStore = new Map();
 let manualDataSummaryAccountIds = new Set();
@@ -367,7 +369,7 @@ const BackendAdapter = (() => {
   }
 
   async function fetchManualData(accountId, options = {}) {
-    const opts = options || {};
+    const opts = (options && typeof options === 'object') ? options : {};
     const forceRefresh = Boolean(opts.force || opts.forceRefresh);
     const skipNotify = Boolean(opts.skipNotify);
 
@@ -385,8 +387,13 @@ const BackendAdapter = (() => {
 
     try {
       const requestInit = { headers: headers() };
-      if (opts.signal) {
-        requestInit.signal = opts.signal;
+      if (Object.prototype.hasOwnProperty.call(opts, 'signal')) {
+        const abortSignal = opts.signal;
+        if (abortSignal && typeof abortSignal === 'object' && typeof abortSignal.aborted === 'boolean') {
+          requestInit.signal = abortSignal;
+        } else if (abortSignal !== undefined && abortSignal !== null) {
+          console.warn('[BackendAdapter] Ignoring non-AbortSignal value passed to fetchManualData');
+        }
       }
 
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/manual-data`, requestInit);
