@@ -224,8 +224,15 @@ apiRouter.put('/db/accounts/:accountId/manual-data', async (req, res) => {
     const saved = await manualStore.set(accountId, { rent_roll });
     res.json(saved);
   } catch (error) {
+    const payload = { error: 'Failed to persist manual data', message: error.message, request_id: req.requestId };
+    if (error && error.code === 'FK_VIOLATION') {
+      payload.code = 'FK_VIOLATION';
+      payload.hint = 'Seed this account_id in the referenced accounts table or relax the FK constraint';
+      console.error(JSON.stringify({ level: 'error', requestId: req.requestId, scope: 'manual-data', op: 'PUT', accountId, message: error.message, code: 'FK_VIOLATION' }));
+      return res.status(424).json(payload);
+    }
     console.error(JSON.stringify({ level: 'error', requestId: req.requestId, scope: 'manual-data', op: 'PUT', accountId, message: error.message }));
-    res.status(400).json({ error: 'Failed to persist manual data', message: error.message, request_id: req.requestId });
+    res.status(400).json(payload);
   }
 });
 
