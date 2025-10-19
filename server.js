@@ -16,7 +16,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const FALLBACK_CONFIG = {
   apiBaseUrl: '/api',
   FEATURE_USE_BACKEND: true,
-  FEATURE_MANUAL_DATA: true
+  FEATURE_MANUAL_DATA
 };
 
 // Manual data store (PostgreSQL)
@@ -44,8 +44,6 @@ function validateConfigPayload(payload) {
       console.warn('[config] Ignoring invalid FEATURE_USE_BACKEND value from backend payload');
     }
   }
-
-  sanitizedConfig.FEATURE_MANUAL_DATA = true;
 
   if (Object.prototype.hasOwnProperty.call(payload, 'FEATURE_MANUAL_DATA')) {
     if (typeof payload.FEATURE_MANUAL_DATA === 'boolean') {
@@ -98,28 +96,24 @@ app.use((req, res, next) => {
   next();
 });
 
-const apiRouter = express.Router();
 const jsonParser = express.json({ limit: '1mb' });
 
-apiRouter.get('/config', async (req, res) => {
+app.get('/api/config', async (req, res) => {
   try {
     const backendConfig = await fetchBackendConfig();
-    res.json({
-      ...backendConfig,
-      FEATURE_MANUAL_DATA: true
-    });
+    res.json(backendConfig);
   } catch (error) {
     console.error(`[config] Falling back to static defaults: ${error.message}`);
     res.json({ ...FALLBACK_CONFIG });
   }
 });
 
-apiRouter.get('/db/accounts', (req, res) => {
+app.get('/api/db/accounts', (req, res) => {
   const accounts = getAccounts();
   res.json({ accounts });
 });
 
-apiRouter.get('/db/accounts/:accountId/balances', (req, res) => {
+app.get('/api/db/accounts/:accountId/balances', (req, res) => {
   const { accountId } = req.params;
   const account = getAccountById(accountId);
   if (!account) {
@@ -136,7 +130,7 @@ apiRouter.get('/db/accounts/:accountId/balances', (req, res) => {
   res.json(balance);
 });
 
-apiRouter.get('/db/accounts/:accountId/transactions', (req, res) => {
+app.get('/api/db/accounts/:accountId/transactions', (req, res) => {
   const { accountId } = req.params;
   const account = getAccountById(accountId);
   if (!account) {
@@ -182,7 +176,7 @@ async function setupManualDataStore() {
   console.log('[manual-data] Manual fields tables ensured');
 }
 // Manual data routes using PostgreSQL store
-apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
+app.get('/api/db/accounts/:accountId/manual-data', async (req, res) => {
   try {
     const { accountId } = req.params;
     // Do NOT require account to exist; manual data may be set ahead of account wiring
@@ -197,7 +191,7 @@ apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual-data', jsonParser, async (req, res) => {
+app.put('/api/db/accounts/:accountId/manual-data', jsonParser, async (req, res) => {
   const { accountId } = req.params;
   // Do NOT require account to exist; allow pre-provisioning
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -239,7 +233,7 @@ apiRouter.put('/db/accounts/:accountId/manual-data', jsonParser, async (req, res
 });
 
 // Health endpoint with simple connectivity check (served by this proxy)
-apiRouter.get('/healthz', async (req, res) => {
+app.get('/api/healthz', async (req, res) => {
   const result = {
     ok: true,
     backendUrl: BACKEND_URL,
@@ -264,7 +258,7 @@ apiRouter.get('/healthz', async (req, res) => {
 });
 
 // TEMPORARY: Migration endpoint to drop FK constraint
-apiRouter.post('/migrate/drop-manual-data-fk', async (req, res) => {
+app.post('/api/migrate/drop-manual-data-fk', async (req, res) => {
   if (!FEATURE_MANUAL_DATA || !manualStore) {
     return res.status(503).json({ error: 'manual_data_not_enabled' });
   }
@@ -303,11 +297,9 @@ apiRouter.post('/migrate/drop-manual-data-fk', async (req, res) => {
   }
 });
 
-app.use('/api', apiRouter);
-
 // Manual field endpoints (property, heloc, mortgage)
 // Property
-apiRouter.get('/db/accounts/:accountId/manual/property/:unit/:field', async (req, res) => {
+app.get('/api/db/accounts/:accountId/manual/property/:unit/:field', async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   try {
     const { accountId, unit, field } = req.params;
@@ -319,9 +311,10 @@ apiRouter.get('/db/accounts/:accountId/manual/property/:unit/:field', async (req
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/property/:unit/:field', jsonParser, async (req, res) => {
+app.put('/api/db/accounts/:accountId/manual/property/:unit/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  if (!manualFields) return res.status(503).json({ error: 'manual_fields_store_unavailable', request_id: req.requestId });
   try {
     const { accountId, unit, field } = req.params;
     const { value, updated_by } = req.body || {};
@@ -339,7 +332,7 @@ apiRouter.put('/db/accounts/:accountId/manual/property/:unit/:field', jsonParser
 });
 
 // HELOC
-apiRouter.get('/db/accounts/:accountId/manual/heloc/:field', async (req, res) => {
+app.get('/api/db/accounts/:accountId/manual/heloc/:field', async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   try {
     const { accountId, field } = req.params;
@@ -351,9 +344,10 @@ apiRouter.get('/db/accounts/:accountId/manual/heloc/:field', async (req, res) =>
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/heloc/:field', jsonParser, async (req, res) => {
+app.put('/api/db/accounts/:accountId/manual/heloc/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  if (!manualFields) return res.status(503).json({ error: 'manual_fields_store_unavailable', request_id: req.requestId });
   try {
     const { accountId, field } = req.params;
     const { value, updated_by } = req.body || {};
@@ -370,7 +364,7 @@ apiRouter.put('/db/accounts/:accountId/manual/heloc/:field', jsonParser, async (
 });
 
 // Mortgage
-apiRouter.get('/db/accounts/:accountId/manual/mortgage/:field', async (req, res) => {
+app.get('/api/db/accounts/:accountId/manual/mortgage/:field', async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   try {
     const { accountId, field } = req.params;
@@ -382,9 +376,10 @@ apiRouter.get('/db/accounts/:accountId/manual/mortgage/:field', async (req, res)
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/mortgage/:field', jsonParser, async (req, res) => {
+app.put('/api/db/accounts/:accountId/manual/mortgage/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  if (!manualFields) return res.status(503).json({ error: 'manual_fields_store_unavailable', request_id: req.requestId });
   try {
     const { accountId, field } = req.params;
     const { value, updated_by } = req.body || {};
@@ -402,11 +397,23 @@ apiRouter.put('/db/accounts/:accountId/manual/mortgage/:field', jsonParser, asyn
 app.use('/api', createProxyMiddleware({
   target: BACKEND_URL,
   changeOrigin: true,
+  proxyTimeout: 30000,
+  timeout: 30000,
   pathRewrite: {
     '^/api': '/api'
   },
   onProxyReq: (proxyReq, req, res) => {
     console.log(`[proxy] ${req.method} ${req.url} -> ${BACKEND_URL}${req.url}`);
+    if (!req.readable && req.body && Object.keys(req.body).length > 0) {
+      const bodyData = JSON.stringify(req.body);
+      const reqContentType = req.headers['content-type'];
+      if (reqContentType && !proxyReq.getHeader('Content-Type')) {
+        proxyReq.setHeader('Content-Type', reqContentType);
+      }
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+      proxyReq.write(bodyData);
+      proxyReq.end();
+    }
   },
   onError: (err, req, res) => {
     console.error(`[proxy] Error: ${err.message}`);
