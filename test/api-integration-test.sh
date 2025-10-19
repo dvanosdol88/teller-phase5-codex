@@ -7,7 +7,7 @@ set -e  # Exit on error
 
 # Configuration
 BASE_URL="${BASE_URL:-https://teller-phase5-codex-1.onrender.com}"
-ACC="${ACC:-acc_test}"
+ACC="${ACC:-}"
 VERBOSE="${VERBOSE:-0}"
 
 # Colors for output
@@ -74,7 +74,32 @@ echo "=========================================="
 echo "API Integration Test Suite"
 echo "=========================================="
 echo "Base URL: $BASE_URL"
-echo "Test Account: $ACC"
+echo "Test Account: ${ACC:-<auto>}"
+echo ""
+
+# Auto-discover an existing account ID if not provided
+if [ -z "$ACC" ]; then
+  DISCOVER_JSON=$(curl -sS "$BASE_URL/api/db/accounts" || true)
+  ACC=$(echo "$DISCOVER_JSON" | python3 - <<'PY'
+import sys, json
+try:
+    data=json.load(sys.stdin)
+    accs=data.get('accounts') or []
+    if accs:
+        print(accs[0].get('id') or '')
+    else:
+        print('')
+except Exception:
+    print('')
+PY
+)
+  if [ -z "$ACC" ]; then
+    echo -e "${YELLOW}[WARN]${NC} Could not auto-discover account id; defaulting to acc_test"
+    ACC="acc_test"
+  else
+    echo -e "${GREEN}[INFO]${NC} Using discovered account id: $ACC"
+  fi
+fi
 echo ""
 
 # Test 1: Health check
@@ -154,4 +179,3 @@ else
     log_error "Some tests failed. ✗"
     exit 1
 fi
-
