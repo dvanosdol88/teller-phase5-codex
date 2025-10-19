@@ -267,6 +267,46 @@ apiRouter.get('/healthz', async (req, res) => {
   res.json(result);
 });
 
+// TEMPORARY: Migration endpoint to drop FK constraint
+apiRouter.post('/migrate/drop-manual-data-fk', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA || !manualStore) {
+    return res.status(503).json({ error: 'manual_data_not_enabled' });
+  }
+  
+  try {
+    const steps = [];
+    
+    // Show current constraints
+    const before = await manualStore.pool.query(
+      "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
+    );
+    steps.push({ step: 'before', constraints: before.rows.map(r => r.conname) });
+    
+    // Drop FK constraint
+    await manualStore.pool.query('ALTER TABLE manual_data DROP CONSTRAINT IF EXISTS manual_data_account_id_fkey');
+    steps.push({ step: 'drop_fk', status: 'done' });
+    
+    // Create index
+    await manualStore.pool.query('CREATE INDEX IF NOT EXISTS idx_manual_data_account_id ON manual_data(account_id)');
+    steps.push({ step: 'create_index', status: 'done' });
+    
+    // Add comment
+    await manualStore.pool.query("COMMENT ON TABLE manual_data IS 'Manual rent-roll per account; FK to accounts is optional and may be enforced externally.'");
+    steps.push({ step: 'add_comment', status: 'done' });
+    
+    // Show final constraints
+    const after = await manualStore.pool.query(
+      "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
+    );
+    steps.push({ step: 'after', constraints: after.rows.map(r => r.conname) });
+    
+    res.json({ success: true, steps });
+  } catch (error) {
+    console.error('[migrate] Failed:', error);
+    res.status(500).json({ error: 'migration_failed', message: error.message });
+  }
+});
+
 app.use('/api', apiRouter);
 
 // Manual field endpoints (property, heloc, mortgage)
