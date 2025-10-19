@@ -436,3 +436,23 @@ These validation procedures ensure:
 - ✓ Token handling works correctly and securely
 - ✓ Rollback is instant and requires no redeployment
 - ✓ UI parity is maintained across all scenarios
+## Editability Contract Tests
+
+Use these tests to confirm the read-only/write boundaries and error semantics.
+
+- Teller/computed writes are blocked:
+  - Attempt `PUT /api/db/accounts/{id}/balances` → expect `405`.
+  - Attempt `PUT /api/db/accounts/{id}/transactions` → expect `405`.
+
+- Manual fields are editable:
+  - `PUT /api/db/accounts/{id}/manual/rent_roll { rent_roll: 2500 }` → expect `200`, body includes `updated_at`.
+  - Subsequent `GET` on effective data reflects updated computed values on read.
+
+- Validation errors:
+  - `rent_roll: -1` → expect `400` with `{ error, reason: "rent_roll must be non-negative", field: "rent_roll" }`.
+  - Non-numeric → expect `400` with reason.
+
+- Foreign key behavior (if enforced by DB):
+  - `PUT` for unknown account id → expect `424` with `{ code: "FK_VIOLATION" }` and remediation hint.
+
+Tip: Correlate errors with `x-request-id` header and server logs.

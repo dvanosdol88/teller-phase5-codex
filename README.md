@@ -82,6 +82,7 @@ See `test/README.md` for details.
 - Validation: docs/VALIDATION.md
 - Troubleshooting: docs/TROUBLESHOOTING.md
 - Deployment options: docs/DEPLOYMENT_CHOICES.md
+ - API Spec: docs/ENDPOINTS.md
 - **Testing**: test/README.md
 
 
@@ -186,3 +187,25 @@ Verification checklist (unchanged in spirit):
 - **Troubleshooting**: See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for common issues, solutions, and debugging tips
 
 **Quick Rollback**: To instantly disable backend integration, set `FEATURE_USE_BACKEND=false` in the `/api/config` endpoint response. The UI will revert to purely static behavior without redeployment. See [docs/VALIDATION.md](docs/VALIDATION.md#rollback-verification) for rollback verification steps.
+
+## Editability Contract
+
+- Teller data: read-only at API and UI. Any `PUT/PATCH/DELETE` to teller data endpoints returns `405 Method Not Allowed`.
+- Computed fields: read-only. Compute on read or via DB view; never accept input.
+- Manual fields: editable with validation; every write stamps `updated_at` and supports `updated_by` when supplied.
+
+### API Surface
+
+- Allowed writes: `GET/PUT /api/db/{account_id}/manual/{field}` only.
+- No write endpoints for `/balances` or `/transactions` (any write → `405`).
+- Error semantics: `400` validation error with `reason`, `405` method not allowed, `424` `FK_VIOLATION` when DB enforces a foreign key on `account_id`.
+
+### UI Guidelines
+
+- Inputs are shown only for manual fields. Teller and computed fields render read-only.
+- Show “Last updated by {user} at {timestamp}” for manual fields when available.
+
+### Health and Tracing
+
+- Health: `GET /api/healthz` returns `{ ok, backendUrl, manualData: { enabled, connected, readonly, dryRun } }`.
+- Tracing: every response includes `x-request-id`; errors include `request_id` for log correlation.

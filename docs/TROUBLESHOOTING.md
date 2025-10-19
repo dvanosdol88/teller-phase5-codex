@@ -534,6 +534,35 @@ python3 -m http.server 8000
 
 **Verification**: Modal should appear with input field and buttons.
 
+### 405 on Write to Teller/Computed
+
+**Symptom**: PUT to `/api/db/accounts/{id}/balances` or `/transactions` returns 405.
+
+**Cause**: Teller and computed endpoints are read-only by contract.
+
+**Solution**: Use `/api/db/accounts/{id}/manual/{field}` for edits.
+
+### 424 FK_VIOLATION on Manual PUT
+
+**Symptom**: Manual PUT returns 424 with `{ code: "FK_VIOLATION" }`.
+
+**Cause**: Database enforces a foreign key from `manual_*` to the accounts table; the `account_id` does not exist.
+
+**Solutions**:
+- Use a real `account_id` returned by `/api/db/accounts`.
+- Seed the account in the referenced table.
+- Relax or drop the FK if manual edits must be independent.
+
+### 400 validation_failed on Manual PUT
+
+**Symptom**: Manual PUT returns 400 with a `reason`.
+
+**Causes**:
+- Non-numeric or negative value for numeric fields (e.g., `rent_roll`).
+- Out-of-range or malformed payload.
+
+**Solution**: Correct the input per field constraints; resubmit.
+
 ### Manual Data Save Fails
 
 **Symptom**: Click "Save" but data doesn't save or shows error.

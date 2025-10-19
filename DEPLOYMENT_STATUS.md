@@ -208,6 +208,16 @@ npm run test:verbose
 
 ---
 
+## Contract Conformance Checklist
+
+- Teller/computed write attempts return `405`.
+- Only manual endpoints accept writes: `GET/PUT /api/db/{account_id}/manual/{field}`.
+- Manual writes validate input and stamp `updated_at` (and `updated_by` when supplied).
+- Invalid manual input returns `400` with a clear `reason`.
+- If DB FK is enforced and account is missing, manual PUT returns `424` with `FK_VIOLATION` and remediation hint.
+
+---
+
 ## Agent Testing Capability
 
 **✅ Proven:** AI agents can run tests and diagnose issues!
@@ -229,4 +239,3 @@ This deployment issue was discovered automatically by an agent running the test 
 - **Test Suite:** `test/api-integration-test.sh`
 - **Test Documentation:** `test/README.md`
 - **Server Code:** `server.js` (lines 56-93 for manual data routes)
-

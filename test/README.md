@@ -18,6 +18,19 @@ VERBOSE=1 ./test/api-integration-test.sh
 
 # Custom account ID
 ACC=acc_custom ./test/api-integration-test.sh
+
+### Contract Tests
+
+- Teller/computed writes are blocked:
+  - `PUT /api/db/accounts/{id}/balances` → expect `405`.
+  - `PUT /api/db/accounts/{id}/transactions` → expect `405`.
+
+- Manual field edits:
+  - `PUT /api/db/accounts/{id}/manual/rent_roll { rent_roll: 2500 }` → `200`, includes `updated_at`.
+  - Invalid input (negative/non-numeric) → `400` with `reason`.
+  - If DB FK enforced and account missing → `424` with `FK_VIOLATION` and remediation hint.
+
+Tip: If `ACC` is not set, the test suite auto-discovers the first account id from `/api/db/accounts`.
 ```
 
 ### What It Tests
@@ -71,4 +84,3 @@ If tests fail:
 3. Run with `VERBOSE=1` to see full responses
 4. Verify `FEATURE_MANUAL_DATA=true` in environment variables
 5. Confirm database is connected via `/api/healthz`
-

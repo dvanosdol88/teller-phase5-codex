@@ -59,3 +59,55 @@ Troubleshooting
 
 Notes
 - Backend remains untouched; adding FEATURE_USE_BACKEND to /api/config is optional and safe.
+
+## Editability Contract (Integration)
+
+- Teller data is read-only at API and UI; any `PUT/PATCH/DELETE` to teller endpoints returns `405`.
+- Computed fields are read-only and derived on read or via DB view; no inputs accepted.
+- Manual fields are editable with validation; writes stamp `updated_at` and may include `updated_by`.
+
+### API Behavior
+
+- Allowed write path: `GET/PUT /api/db/{account_id}/manual/{field}` only.
+- No write endpoints for `/balances` or `/transactions`.
+- Error codes:
+  - `400` invalid manual input (returns `{ error, reason, field }`).
+  - `405` disallowed method on teller/computed endpoints.
+  - `424` `FK_VIOLATION` when DB foreign key requires the account to exist; remediate by seeding the account row or relaxing the FK.
+
+### Examples
+
+- PUT manual rent roll
+```
+PUT /api/db/accounts/acc_1/manual/rent_roll
+{ "rent_roll": 2500.00, "updated_by": "david" }
+
+200 OK
+{ "account_id": "acc_1", "rent_roll": 2500.0, "updated_at": "2025-10-19T12:34:56.789Z" }
+```
+
+- Error: invalid input
+```
+PUT /api/db/accounts/acc_1/manual/rent_roll
+{ "rent_roll": -1 }
+
+400 Bad Request
+{ "error": "validation_failed", "reason": "rent_roll must be non-negative", "field": "rent_roll" }
+```
+
+- Error: disallowed write
+```
+PUT /api/db/accounts/acc_1/balances
+
+405 Method Not Allowed
+{ "error": "method_not_allowed" }
+```
+
+- Error: foreign key violation (if enforced)
+```
+PUT /api/db/accounts/unknown/manual/rent_roll
+{ "rent_roll": 2500 }
+
+424 Failed Dependency
+{ "error": "Failed to persist manual data", "code": "FK_VIOLATION", "hint": "Seed this account_id in the referenced accounts table or relax the FK constraint" }
+```
