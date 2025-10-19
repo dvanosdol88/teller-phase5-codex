@@ -1,6 +1,8 @@
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
+const { getAccounts, getAccountById, getBalanceByAccountId, getTransactionsByAccountId } = require('./lib/dataStore');
+const { ManualDataStore } = require('./lib/manualDataStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -9,8 +11,10 @@ const BACKEND_URL = process.env.BACKEND_URL || 'https://teller10-15a.onrender.co
 const FALLBACK_CONFIG = {
   apiBaseUrl: '/api',
   FEATURE_USE_BACKEND: true,
-  FEATURE_MANUAL_DATA: false
+  FEATURE_MANUAL_DATA: true
 };
+
+const manualDataStore = new ManualDataStore();
 
 function validateConfigPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -33,6 +37,8 @@ function validateConfigPayload(payload) {
       console.warn('[config] Ignoring invalid FEATURE_USE_BACKEND value from backend payload');
     }
   }
+
+  sanitizedConfig.FEATURE_MANUAL_DATA = true;
 
   if (Object.prototype.hasOwnProperty.call(payload, 'FEATURE_MANUAL_DATA')) {
     if (typeof payload.FEATURE_MANUAL_DATA === 'boolean') {
@@ -71,15 +77,141 @@ async function fetchBackendConfig() {
 console.log(`[server] Starting proxy server on port ${PORT}`);
 console.log(`[server] Backend URL: ${BACKEND_URL}`);
 
-app.get('/api/config', async (req, res) => {
+app.use(express.json({ limit: '1mb' }));
+
+const apiRouter = express.Router();
+
+apiRouter.get('/config', async (req, res) => {
   try {
     const backendConfig = await fetchBackendConfig();
-    res.json(backendConfig);
+    res.json({
+      ...backendConfig,
+      FEATURE_MANUAL_DATA: true
+    });
   } catch (error) {
     console.error(`[config] Falling back to static defaults: ${error.message}`);
     res.json({ ...FALLBACK_CONFIG });
   }
 });
+
+apiRouter.get('/db/accounts', (req, res) => {
+  const accounts = getAccounts();
+  res.json({ accounts });
+});
+
+apiRouter.get('/db/accounts/:accountId/balances', (req, res) => {
+  const { accountId } = req.params;
+  const account = getAccountById(accountId);
+  if (!account) {
+    res.status(404).json({ error: 'Account not found' });
+    return;
+  }
+
+  const balance = getBalanceByAccountId(accountId);
+  if (!balance) {
+    res.status(404).json({ error: 'Balance not found' });
+    return;
+  }
+
+  res.json(balance);
+});
+
+apiRouter.get('/db/accounts/:accountId/transactions', (req, res) => {
+  const { accountId } = req.params;
+  const account = getAccountById(accountId);
+  if (!account) {
+    res.status(404).json({ error: 'Account not found' });
+    return;
+  }
+
+  const { limit: limitQuery } = req.query;
+  let limit = undefined;
+  if (limitQuery !== undefined) {
+    const parsed = Number(limitQuery);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      res.status(400).json({ error: 'limit must be a positive number' });
+      return;
+    }
+    limit = Math.floor(parsed);
+  } else {
+    limit = 10;
+  }
+
+  const transactions = getTransactionsByAccountId(accountId, limit);
+  if (!transactions) {
+    res.status(404).json({ error: 'Transactions not found' });
+    return;
+  }
+
+  res.json(transactions);
+});
+
+apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const account = getAccountById(accountId);
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+
+    const payload = await manualDataStore.get(accountId, account.currency);
+    res.json(payload);
+  } catch (error) {
+    console.error(`[manual-data] Failed to read manual data for ${req.params.accountId}: ${error.message}`);
+    res.status(500).json({ error: 'Failed to read manual data' });
+  }
+});
+
+apiRouter.put('/db/accounts/:accountId/manual-data', async (req, res) => {
+  const { accountId } = req.params;
+  const account = getAccountById(accountId);
+  if (!account) {
+    res.status(404).json({ error: 'Account not found' });
+    return;
+  }
+
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+  if (!Object.prototype.hasOwnProperty.call(body, 'rent_roll')) {
+    res.status(400).json({ error: 'rent_roll is required (use null to clear)' });
+    return;
+  }
+
+  const { rent_roll: rentRoll } = body;
+
+  if (rentRoll === null) {
+    try {
+      const cleared = await manualDataStore.clear(accountId, account.currency);
+      res.json(cleared);
+    } catch (error) {
+      console.error(`[manual-data] Failed to clear manual data for ${accountId}: ${error.message}`);
+      res.status(500).json({ error: 'Failed to clear manual data' });
+    }
+    return;
+  }
+
+  if (typeof rentRoll === 'string' && rentRoll.trim() === '') {
+    res.status(400).json({ error: 'rent_roll must be a non-empty numeric value or null' });
+    return;
+  }
+
+  const numeric = Number(rentRoll);
+  if (Number.isNaN(numeric) || !Number.isFinite(numeric) || numeric < 0) {
+    res.status(400).json({ error: 'rent_roll must be a non-negative number or null' });
+    return;
+  }
+
+  try {
+    const record = await manualDataStore.set(accountId, numeric, account.currency);
+    res.json(record);
+  } catch (error) {
+    console.error(`[manual-data] Failed to persist manual data for ${accountId}: ${error.message}`);
+    res.status(500).json({ error: 'Failed to persist manual data' });
+  }
+});
+
+app.use('/api', apiRouter);
 
 app.use('/api', createProxyMiddleware({
   target: BACKEND_URL,
