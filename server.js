@@ -89,9 +89,6 @@ if (FEATURE_MANUAL_DATA) {
   console.log(`[server] MANUAL_DATA_DRY_RUN: ${MANUAL_DATA_DRY_RUN}`);
 }
 
-// basic body parsing for JSON endpoints we may serve locally
-app.use(express.json());
-
 // Lightweight request id for tracing
 app.use((req, res, next) => {
   const existing = req.headers['x-request-id'];
@@ -101,9 +98,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '1mb' }));
-
 const apiRouter = express.Router();
+const jsonParser = express.json({ limit: '1mb' });
 
 apiRouter.get('/config', async (req, res) => {
   try {
@@ -201,7 +197,7 @@ apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual-data', async (req, res) => {
+apiRouter.put('/db/accounts/:accountId/manual-data', jsonParser, async (req, res) => {
   const { accountId } = req.params;
   // Do NOT require account to exist; allow pre-provisioning
   const body = req.body && typeof req.body === 'object' ? req.body : {};
@@ -323,7 +319,7 @@ apiRouter.get('/db/accounts/:accountId/manual/property/:unit/:field', async (req
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/property/:unit/:field', async (req, res) => {
+apiRouter.put('/db/accounts/:accountId/manual/property/:unit/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
   try {
@@ -355,7 +351,7 @@ apiRouter.get('/db/accounts/:accountId/manual/heloc/:field', async (req, res) =>
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/heloc/:field', async (req, res) => {
+apiRouter.put('/db/accounts/:accountId/manual/heloc/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
   try {
@@ -386,7 +382,7 @@ apiRouter.get('/db/accounts/:accountId/manual/mortgage/:field', async (req, res)
   }
 });
 
-apiRouter.put('/db/accounts/:accountId/manual/mortgage/:field', async (req, res) => {
+apiRouter.put('/db/accounts/:accountId/manual/mortgage/:field', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
   if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
   try {
