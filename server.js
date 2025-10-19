@@ -183,12 +183,7 @@ async function setupManualDataStore() {
 apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
   try {
     const { accountId } = req.params;
-    const account = getAccountById(accountId);
-    if (!account) {
-      res.status(404).json({ error: 'Account not found' });
-      return;
-    }
-
+    // Do NOT require account to exist; manual data may be set ahead of account wiring
     if (!FEATURE_MANUAL_DATA || !manualStore) {
       return res.json({ account_id: accountId, rent_roll: null, updated_at: null });
     }
@@ -202,12 +197,7 @@ apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
 
 apiRouter.put('/db/accounts/:accountId/manual-data', async (req, res) => {
   const { accountId } = req.params;
-  const account = getAccountById(accountId);
-  if (!account) {
-    res.status(404).json({ error: 'Account not found' });
-    return;
-  }
-
+  // Do NOT require account to exist; allow pre-provisioning
   const body = req.body && typeof req.body === 'object' ? req.body : {};
   if (!Object.prototype.hasOwnProperty.call(body, 'rent_roll')) {
     res.status(400).json({ error: 'rent_roll is required (use null to clear)' });
