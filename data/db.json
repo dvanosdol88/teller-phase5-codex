@@ -1,0 +1,237 @@
+{
+  "accounts": [
+    {
+      "id": "acc_llc_operating",
+      "name": "LLC Operating Checking",
+      "institution": "Teller Demo Bank",
+      "last_four": "7123",
+      "type": "depository",
+      "subtype": "checking",
+      "currency": "USD"
+    },
+    {
+      "id": "acc_llc_reserve",
+      "name": "LLC Reserve Savings",
+      "institution": "Teller Demo Bank",
+      "last_four": "0441",
+      "type": "depository",
+      "subtype": "savings",
+      "currency": "USD"
+    },
+    {
+      "id": "acc_llc_credit",
+      "name": "LLC Corporate Card",
+      "institution": "Teller Demo Bank",
+      "last_four": "8899",
+      "type": "credit",
+      "subtype": "credit_card",
+      "currency": "USD"
+    },
+    {
+      "id": "acc_property_tax",
+      "name": "Property Tax Escrow",
+      "institution": "Community Credit Union",
+      "last_four": "3001",
+      "type": "depository",
+      "subtype": "money_market",
+      "currency": "USD"
+    }
+  ],
+  "balances": {
+    "acc_llc_operating": {
+      "account_id": "acc_llc_operating",
+      "cached_at": "2025-10-18T12:00:00.000Z",
+      "balance": {
+        "available": 48500.32,
+        "ledger": 49215.32,
+        "currency": "USD"
+      }
+    },
+    "acc_llc_reserve": {
+      "account_id": "acc_llc_reserve",
+      "cached_at": "2025-10-18T12:00:00.000Z",
+      "balance": {
+        "available": 125000.0,
+        "ledger": 125000.0,
+        "currency": "USD"
+      }
+    },
+    "acc_llc_credit": {
+      "account_id": "acc_llc_credit",
+      "cached_at": "2025-10-18T12:00:00.000Z",
+      "balance": {
+        "available": -18250.44,
+        "ledger": -18250.44,
+        "credit_limit": 25000,
+        "currency": "USD"
+      }
+    },
+    "acc_property_tax": {
+      "account_id": "acc_property_tax",
+      "cached_at": "2025-10-18T12:00:00.000Z",
+      "balance": {
+        "available": 18350.75,
+        "ledger": 18350.75,
+        "currency": "USD"
+      }
+    }
+  },
+  "transactions": {
+    "acc_llc_operating": {
+      "account_id": "acc_llc_operating",
+      "cached_at": "2025-10-18T12:05:00.000Z",
+      "transactions": [
+        {
+          "id": "txn_operating_001",
+          "description": "October Rent Collected",
+          "amount": 12450.0,
+          "currency": "USD",
+          "date": "2025-10-05",
+          "post_date": "2025-10-06",
+          "status": "posted",
+          "type": "ach_credit",
+          "category": "income"
+        },
+        {
+          "id": "txn_operating_002",
+          "description": "Vendor - HVAC Maintenance",
+          "amount": -2450.67,
+          "currency": "USD",
+          "date": "2025-10-10",
+          "post_date": "2025-10-11",
+          "status": "posted",
+          "type": "ach_debit",
+          "category": "maintenance"
+        },
+        {
+          "id": "txn_operating_003",
+          "description": "Management Fee",
+          "amount": -1600.0,
+          "currency": "USD",
+          "date": "2025-10-12",
+          "post_date": "2025-10-12",
+          "status": "posted",
+          "type": "fee",
+          "category": "management"
+        },
+        {
+          "id": "txn_operating_004",
+          "description": "Late Fee Collected",
+          "amount": 125.0,
+          "currency": "USD",
+          "date": "2025-10-14",
+          "post_date": "2025-10-14",
+          "status": "posted",
+          "type": "ach_credit",
+          "category": "income"
+        },
+        {
+          "id": "txn_operating_005",
+          "description": "Insurance Premium",
+          "amount": -3895.43,
+          "currency": "USD",
+          "date": "2025-10-17",
+          "post_date": "2025-10-17",
+          "status": "posted",
+          "type": "ach_debit",
+          "category": "insurance"
+        }
+      ]
+    },
+    "acc_llc_reserve": {
+      "account_id": "acc_llc_reserve",
+      "cached_at": "2025-10-18T12:05:00.000Z",
+      "transactions": [
+        {
+          "id": "txn_reserve_001",
+          "description": "Transfer from Operating",
+          "amount": 15000.0,
+          "currency": "USD",
+          "date": "2025-10-01",
+          "post_date": "2025-10-01",
+          "status": "posted",
+          "type": "transfer",
+          "category": "transfer"
+        },
+        {
+          "id": "txn_reserve_002",
+          "description": "Quarterly Interest",
+          "amount": 182.45,
+          "currency": "USD",
+          "date": "2025-10-15",
+          "post_date": "2025-10-15",
+          "status": "posted",
+          "type": "interest",
+          "category": "income"
+        }
+      ]
+    },
+    "acc_llc_credit": {
+      "account_id": "acc_llc_credit",
+      "cached_at": "2025-10-18T12:05:00.000Z",
+      "transactions": [
+        {
+          "id": "txn_credit_001",
+          "description": "Travel - Site Visit",
+          "amount": -842.12,
+          "currency": "USD",
+          "date": "2025-10-08",
+          "post_date": "2025-10-09",
+          "status": "posted",
+          "type": "card_purchase",
+          "category": "travel"
+        },
+        {
+          "id": "txn_credit_002",
+          "description": "Fuel - Maintenance Fleet",
+          "amount": -268.11,
+          "currency": "USD",
+          "date": "2025-10-10",
+          "post_date": "2025-10-10",
+          "status": "posted",
+          "type": "card_purchase",
+          "category": "fuel"
+        },
+        {
+          "id": "txn_credit_003",
+          "description": "Payment from Operating",
+          "amount": 5000.0,
+          "currency": "USD",
+          "date": "2025-10-16",
+          "post_date": "2025-10-16",
+          "status": "posted",
+          "type": "payment",
+          "category": "transfer"
+        }
+      ]
+    },
+    "acc_property_tax": {
+      "account_id": "acc_property_tax",
+      "cached_at": "2025-10-18T12:05:00.000Z",
+      "transactions": [
+        {
+          "id": "txn_tax_001",
+          "description": "Property Tax Accrual",
+          "amount": 3200.0,
+          "currency": "USD",
+          "date": "2025-10-03",
+          "post_date": "2025-10-03",
+          "status": "posted",
+          "type": "ach_credit",
+          "category": "income"
+        },
+        {
+          "id": "txn_tax_002",
+          "description": "County Tax Payment",
+          "amount": -2750.0,
+          "currency": "USD",
+          "date": "2025-10-13",
+          "post_date": "2025-10-13",
+          "status": "posted",
+          "type": "ach_debit",
+          "category": "tax"
+        }
+      ]
+    }
+  }
+}
