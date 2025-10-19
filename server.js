@@ -16,7 +16,7 @@ const DATABASE_URL = process.env.DATABASE_URL;
 const FALLBACK_CONFIG = {
   apiBaseUrl: '/api',
   FEATURE_USE_BACKEND: true,
-  FEATURE_MANUAL_DATA: true
+  FEATURE_MANUAL_DATA
 };
 
 // Manual data store (PostgreSQL)
@@ -44,8 +44,6 @@ function validateConfigPayload(payload) {
       console.warn('[config] Ignoring invalid FEATURE_USE_BACKEND value from backend payload');
     }
   }
-
-  sanitizedConfig.FEATURE_MANUAL_DATA = true;
 
   if (Object.prototype.hasOwnProperty.call(payload, 'FEATURE_MANUAL_DATA')) {
     if (typeof payload.FEATURE_MANUAL_DATA === 'boolean') {
@@ -103,10 +101,7 @@ const jsonParser = express.json({ limit: '1mb' });
 app.get('/api/config', async (req, res) => {
   try {
     const backendConfig = await fetchBackendConfig();
-    res.json({
-      ...backendConfig,
-      FEATURE_MANUAL_DATA: true
-    });
+    res.json(backendConfig);
   } catch (error) {
     console.error(`[config] Falling back to static defaults: ${error.message}`);
     res.json({ ...FALLBACK_CONFIG });
