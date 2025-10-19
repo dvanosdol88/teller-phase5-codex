@@ -3,6 +3,7 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
 const { getAccounts, getAccountById, getBalanceByAccountId, getTransactionsByAccountId } = require('./lib/dataStore');
 const { PgManualDataStore } = require('./lib/pgManualDataStore');
+const { ManualFieldsStore } = require('./lib/manualFieldsStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,6 +21,7 @@ const FALLBACK_CONFIG = {
 
 // Manual data store (PostgreSQL)
 let manualStore = null;
+let manualFields = null;
 
 function validateConfigPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -178,6 +180,10 @@ async function setupManualDataStore() {
   manualStore = new PgManualDataStore({ connectionString: DATABASE_URL });
   await manualStore.init();
   console.log('[manual-data] PostgreSQL manual data store initialized');
+
+  manualFields = new ManualFieldsStore({ connectionString: DATABASE_URL });
+  await manualFields.init();
+  console.log('[manual-data] Manual fields tables ensured');
 }
 // Manual data routes using PostgreSQL store
 apiRouter.get('/db/accounts/:accountId/manual-data', async (req, res) => {
@@ -262,6 +268,101 @@ apiRouter.get('/healthz', async (req, res) => {
 });
 
 app.use('/api', apiRouter);
+
+// Manual field endpoints (property, heloc, mortgage)
+// Property
+apiRouter.get('/db/accounts/:accountId/manual/property/:unit/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  try {
+    const { accountId, unit, field } = req.params;
+    if (!manualFields) return res.json({ account_id: accountId, key: `property.${unit}.${field}`, value: null, updated_at: null, updated_by: null });
+    const data = await manualFields.getProperty(accountId, unit, field);
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: 'validation_failed', reason: error.message, request_id: req.requestId });
+  }
+});
+
+apiRouter.put('/db/accounts/:accountId/manual/property/:unit/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  try {
+    const { accountId, unit, field } = req.params;
+    const { value, updated_by } = req.body || {};
+    if (MANUAL_DATA_DRY_RUN) {
+      // just validate
+      await manualFields.setProperty(accountId, unit, field, value, updated_by);
+      return res.json({ account_id: accountId, key: `property.${unit}.${field}`, value, updated_at: new Date().toISOString(), updated_by });
+    }
+    const saved = await manualFields.setProperty(accountId, unit, field, value, updated_by);
+    res.json(saved);
+  } catch (error) {
+    const payload = { error: 'validation_failed', reason: error.message, request_id: req.requestId };
+    res.status(400).json(payload);
+  }
+});
+
+// HELOC
+apiRouter.get('/db/accounts/:accountId/manual/heloc/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  try {
+    const { accountId, field } = req.params;
+    if (!manualFields) return res.json({ account_id: accountId, key: `heloc.${field}`, value: null, updated_at: null, updated_by: null });
+    const data = await manualFields.getHeloc(accountId, field);
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: 'validation_failed', reason: error.message, request_id: req.requestId });
+  }
+});
+
+apiRouter.put('/db/accounts/:accountId/manual/heloc/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  try {
+    const { accountId, field } = req.params;
+    const { value, updated_by } = req.body || {};
+    if (MANUAL_DATA_DRY_RUN) {
+      await manualFields.setHeloc(accountId, field, value, updated_by);
+      return res.json({ account_id: accountId, key: `heloc.${field}`, value, updated_at: new Date().toISOString(), updated_by });
+    }
+    const saved = await manualFields.setHeloc(accountId, field, value, updated_by);
+    res.json(saved);
+  } catch (error) {
+    const payload = { error: 'validation_failed', reason: error.message, request_id: req.requestId };
+    res.status(400).json(payload);
+  }
+});
+
+// Mortgage
+apiRouter.get('/db/accounts/:accountId/manual/mortgage/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  try {
+    const { accountId, field } = req.params;
+    if (!manualFields) return res.json({ account_id: accountId, key: `mortgage.${field}`, value: null, updated_at: null, updated_by: null });
+    const data = await manualFields.getMortgage(accountId, field);
+    res.json(data);
+  } catch (error) {
+    res.status(400).json({ error: 'validation_failed', reason: error.message, request_id: req.requestId });
+  }
+});
+
+apiRouter.put('/db/accounts/:accountId/manual/mortgage/:field', async (req, res) => {
+  if (!FEATURE_MANUAL_DATA) return res.status(404).json({ error: 'manual_data_disabled' });
+  if (MANUAL_DATA_READONLY) return res.status(405).json({ error: 'manual_data_readonly', request_id: req.requestId });
+  try {
+    const { accountId, field } = req.params;
+    const { value, updated_by } = req.body || {};
+    if (MANUAL_DATA_DRY_RUN) {
+      await manualFields.setMortgage(accountId, field, value, updated_by);
+      return res.json({ account_id: accountId, key: `mortgage.${field}`, value, updated_at: new Date().toISOString(), updated_by });
+    }
+    const saved = await manualFields.setMortgage(accountId, field, value, updated_by);
+    res.json(saved);
+  } catch (error) {
+    const payload = { error: 'validation_failed', reason: error.message, request_id: req.requestId };
+    res.status(400).json(payload);
+  }
+});
 app.use('/api', createProxyMiddleware({
   target: BACKEND_URL,
   changeOrigin: true,
@@ -300,6 +401,10 @@ async function cleanupAndExit(signal) {
     if (manualStore && typeof manualStore.close === 'function') {
       await manualStore.close();
       console.log('[manual-data] store closed');
+    }
+    if (manualFields && typeof manualFields.close === 'function') {
+      await manualFields.close();
+      console.log('[manual-data] fields store closed');
     }
   } catch (e) {
     console.error('[server] error during cleanup', e);
