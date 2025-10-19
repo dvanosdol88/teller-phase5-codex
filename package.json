@@ -5,14 +5,18 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "bash test/api-integration-test.sh",
+    "test:verbose": "VERBOSE=1 bash test/api-integration-test.sh",
+    "test:local": "BASE_URL=http://localhost:3000 bash test/api-integration-test.sh"
   },
   "engines": {
     "node": ">=18.0.0"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "http-proxy-middleware": "^2.0.6"
+    "http-proxy-middleware": "^2.0.6",
+    "pg": "^8.12.0"
   },
   "keywords": [
     "teller",

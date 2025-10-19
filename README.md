@@ -23,11 +23,66 @@ BACKEND_URL=https://teller10-15a.onrender.com npm start
 # Visit http://localhost:3000
 ```
 
+### Manual Data backed by PostgreSQL (optional)
+
+Enable local manual-data endpoints served by this proxy and persist values to PostgreSQL.
+
+Env vars:
+- `FEATURE_MANUAL_DATA=true` to enable endpoints below
+- `DATABASE_URL` PostgreSQL connection string
+- `MANUAL_DATA_TABLE` optional (default `manual_data`)
+- `PGSSL=false` to disable SSL (defaults to SSL suitable for Render)
+
+Endpoints served locally when enabled:
+- `GET /api/db/accounts/:id/manual-data`
+- `PUT /api/db/accounts/:id/manual-data` with JSON `{ "rent_roll": number | null }`
+
+Response shape mirrors file-based behavior:
+```
+{
+  "account_id": "acc_1",
+  "rent_roll": 2500.0 | null,
+  "updated_at": "2025-10-18T12:34:56.789Z" | null
+}
+```
+
+The table is created automatically if missing:
+```
+CREATE TABLE manual_data (
+  account_id TEXT PRIMARY KEY,
+  rent_roll NUMERIC NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+## Testing
+
+**NEW: Automated API Integration Tests** ✅
+
+```bash
+# Verify deployment is ready
+./test/verify-deployment.sh
+
+# Run full test suite against deployed service
+npm test
+
+# Verbose mode (show response bodies)
+npm run test:verbose
+
+# Test local development server
+npm run test:local
+```
+
+**Current Status:** See [DEPLOYMENT_STATUS.md](DEPLOYMENT_STATUS.md) for latest test results and deployment verification.
+
+See `test/README.md` for details.
+
 ## Documentation
 - Integration: docs/INTEGRATION.md
 - Validation: docs/VALIDATION.md
 - Troubleshooting: docs/TROUBLESHOOTING.md
 - Deployment options: docs/DEPLOYMENT_CHOICES.md
+- **Testing**: test/README.md
 
 
 # Teller Cached Dashboard — Visual-Only Snapshot

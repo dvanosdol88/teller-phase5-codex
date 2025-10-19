@@ -1,10 +1,23 @@
 services:
-  - type: static_site
-    name: teller10-18-devinUI
-    repo: https://github.com/dvanosdol88/teller10-18-devinUI
+  - type: web
+    name: teller-phase5-codex-1
+    repo: https://github.com/dvanosdol88/teller-phase5-codex
     branch: main
-    buildCommand: ""
-    staticPublishPath: visual-only
-    autoDeploy: true
-    pullRequestPreviewsEnabled: false
-    plan: free
+    buildCommand: npm install
+    startCommand: node server.js
+    plan: starter
+    envVars:
+      - key: BACKEND_URL
+        value: https://teller10-15a.onrender.com
+      - key: FEATURE_MANUAL_DATA
+        value: true
+      - key: DATABASE_URL
+        sync: false
+      - key: MANUAL_DATA_TABLE
+        value: manual_data
+      - key: PGSSL
+        value: "true"
+      - key: MANUAL_DATA_READONLY
+        value: "false"
+      - key: MANUAL_DATA_DRY_RUN
+        value: "false"
