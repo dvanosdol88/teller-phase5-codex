@@ -106,7 +106,34 @@
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="antialiased passcode-locked">
+
+    <!-- PASSCODE OVERLAY - Always mounted in DOM -->
+    <div
+      id="passcode-overlay"
+      class="passcode-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="passcode-title"
+    >
+      <div class="passcode-dialog">
+        <h2 id="passcode-title">Enter passcode</h2>
+        <p class="passcode-hint">This personal dashboard is locked. Enter the four-digit code to continue.</p>
+        <form id="passcode-form" class="passcode-form" autocomplete="off">
+          <div class="passcode-inputs">
+            <input class="passcode-input" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="First digit" />
+            <input class="passcode-input" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Second digit" />
+            <input class="passcode-input" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Third digit" />
+            <input class="passcode-input" type="password" inputmode="numeric" maxlength="1" pattern="[0-9]*" aria-label="Fourth digit" />
+          </div>
+          <button type="submit" class="btn btn--primary passcode-submit">Unlock</button>
+        </form>
+        <p id="passcode-error" class="passcode-error" role="status" aria-live="polite"></p>
+      </div>
+    </div>
+
+    <!-- MAIN PAGE CONTENT - Locked via inert attribute when passcode active -->
+    <div class="page">
 
     <header class="bg-white shadow-sm sticky top-0 z-40" style="background-color: var(--bg-secondary); box-shadow: var(--shadow);">
         <nav class="container mx-auto px-6 py-4 flex justify-between items-center">
@@ -256,6 +283,11 @@
     <!-- Toast Notification -->
     <div id="toast" class="toast hidden"></div>
 
+    </div> <!-- End .page -->
+
+    <!-- Passcode Scripts -->
+    <link rel="stylesheet" href="./passcode-styles.css" />
+    <script src="./passcode-logic.js"></script>
     <!-- Teller Connect SDK -->
     <script src="https://cdn.teller.io/connect/connect.js"></script>
     <!-- Cache-bust app script to ensure latest JS is loaded -->

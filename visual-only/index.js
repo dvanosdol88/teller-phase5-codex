@@ -1085,6 +1085,8 @@ function setupThemeToggle() {
 }
 
 async function boot() {
+  await waitForPasscodeUnlock();
+  
   const savedToken = localStorage.getItem('teller_access_token');
   if (savedToken) {
     window.TEST_BEARER_TOKEN = savedToken;
