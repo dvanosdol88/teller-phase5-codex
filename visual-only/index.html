@@ -182,12 +182,52 @@
                                 <div id="assets-container" class="space-y-4">
                                     <!-- Asset accounts will be rendered here -->
                                 </div>
+                                <div class="mt-4 p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
+                                    <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">672 Elm Value (USD)</label>
+                                    <div class="flex space-x-2">
+                                        <input id="asset-672-elm" type="number" step="0.01" min="0" placeholder="0.00" class="flex-1 border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                        <button id="save-asset-672-elm" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button>
+                                    </div>
+                                </div>
                             </div>
                             <!-- Liabilities Column -->
                             <div>
                                 <h4 class="font-bold text-slate-800 text-xl mb-4 text-center" style="color: var(--text-primary);">Liabilities</h4>
-                                <div id="liabilities-container" class="space-y-4">
-                                    <!-- Liability accounts will be rendered here -->
+                                <div id="liabilities-container" class="space-y-4"></div>
+                                <div class="space-y-4">
+                                    <div class="p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
+                                        <div class="font-semibold mb-2">HELOC Loan</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input id="heloc-loan-amount" type="number" step="0.01" min="0" placeholder="Loan Amount (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="heloc-interest-rate" type="number" step="0.0001" min="0" max="99.9999" placeholder="Interest Rate (%)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="heloc-monthly-payment" type="number" step="0.01" min="0" placeholder="Monthly Payment (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="heloc-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                        </div>
+                                        <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
+                                        <div class="mt-2 text-right"><button id="save-heloc" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                    </div>
+                                    <div class="p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
+                                        <div class="font-semibold mb-2">Original Mortgage Loan (672)</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input id="m672-loan-amount" type="number" step="0.01" min="0" placeholder="Loan Amount (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="m672-interest-rate" type="number" step="0.0001" min="0" max="99.9999" placeholder="Interest Rate (%)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="m672-monthly-payment" type="number" step="0.01" min="0" placeholder="Monthly Payment (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="m672-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                        </div>
+                                        <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
+                                        <div class="mt-2 text-right"><button id="save-m672" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                    </div>
+                                    <div class="p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
+                                        <div class="font-semibold mb-2">Roof Loan</div>
+                                        <div class="grid grid-cols-2 gap-2">
+                                            <input id="roof-loan-amount" type="number" step="0.01" min="0" placeholder="Loan Amount (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="roof-interest-rate" type="number" step="0.0001" min="0" max="99.9999" placeholder="Interest Rate (%)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="roof-monthly-payment" type="number" step="0.01" min="0" placeholder="Monthly Payment (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                            <input id="roof-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
+                                        </div>
+                                        <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
+                                        <div class="mt-2 text-right"><button id="save-roof" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -195,6 +235,9 @@
                             <div id="equity-card" class="bg-green-100 p-4 rounded-lg max-w-xs mx-auto">
                                 <span class="font-semibold text-slate-800">Total Equity</span>
                                 <p id="total-equity-balance" class="font-bold text-green-800 text-2xl">$0.00</p>
+                                <div class="mt-2 text-sm" style="color: var(--text-secondary);">
+                                  <span id="total-assets-label">Total Assets: $0.00</span> · <span id="total-liabilities-label">Total Liabilities: $0.00</span>
+                                </div>
                             </div>
                         </div>
                     </div>
