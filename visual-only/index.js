@@ -1113,6 +1113,8 @@ async function init() {
   const assetsContainer = document.getElementById('assets-container');
   const liabilitiesContainer = document.getElementById('liabilities-container');
   const totalEquityValue = document.getElementById('total-equity-balance');
+  const totalAssetsValue = document.getElementById('total-assets-balance');
+  const totalLiabilitiesValue = document.getElementById('total-liabilities-balance');
 
   if (!assetsContainer || !liabilitiesContainer) {
     console.error('Required containers not found');
@@ -1155,6 +1157,14 @@ async function init() {
   }
   
   lastComputedTotals = { assets: totalAssets, liabilities: totalLiabilities };
+
+  if (totalAssetsValue) {
+    totalAssetsValue.textContent = formatCurrency(totalAssets);
+  }
+  
+  if (totalLiabilitiesValue) {
+    totalLiabilitiesValue.textContent = formatCurrency(totalLiabilities);
+  }
 
   const totalEquity = totalAssets - totalLiabilities;
   if (totalEquityValue) {
