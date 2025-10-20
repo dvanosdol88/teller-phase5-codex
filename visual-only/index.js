@@ -13,6 +13,7 @@ console.log('[UI] load time:', new Date().toISOString());
 const manualDataStore = new Map();
 let manualDataSummaryAccountIds = new Set();
 let lastComputedTotals = { assets: 0, liabilities: 0 };
+const LIABILITY_SLUGS = ['heloc_loan','original_mortgage_loan_672','roof_loan'];
 
 const manualDataUI = {
   bound: false,
@@ -315,6 +316,18 @@ const BackendAdapter = (() => {
     return Boolean(window.FEATURE_USE_BACKEND);
   }
 
+  async function fetchManualSummary() {
+    try {
+      const resp = await fetch('/api/manual/summary', { headers: headers() });
+      if (!resp.ok) throw new Error('manual summary failed');
+      const data = await resp.json();
+      return data;
+    } catch (e) {
+      recordDiagnostic('GET /api/manual/summary', e);
+      return { manual: { liabilities: {}, assets: {} }, calculated: { totalAssets: 0, totalLiabilities: 0, totalEquity: 0 } };
+    }
+  }
+
   function markBackendHealthy() {
     if (isBackendEnabled()) {
       setBackendStatus('live', '');
@@ -370,11 +383,11 @@ const BackendAdapter = (() => {
       setBackendStatus('degraded', 'Unable to load backend configuration; using cached data');
     }
 
-    return {
-      enabled: Boolean(window.FEATURE_USE_BACKEND),
-      manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
-      apiBaseUrl: state.apiBaseUrl
-    };
+  return { 
+    enabled: Boolean(window.FEATURE_USE_BACKEND),
+    manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
+    apiBaseUrl: state.apiBaseUrl
+  };
   }
 
   function headers() {
@@ -415,7 +428,13 @@ const BackendAdapter = (() => {
     if (!isBackendEnabled()) return MOCK_BALANCES[accountId];
     try {
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/balances`, { headers: headers() });
-      if (!resp.ok) throw new Error("balance failed");
+      if (!resp.ok) {
+        if (resp.status === 404) {
+          // Treat missing balance as zero; do not degrade entire app state
+          return { available: 0, cached_at: null };
+        }
+        throw new Error("balance failed");
+      }
       const data = await resp.json();
       markBackendHealthy();
       return { ...data.balance, cached_at: data.cached_at };
@@ -947,7 +966,8 @@ function setupDiagnosticsBanner() {
       const now = Date.now();
       if (now - diagnosticsToastCooldown > 4000) {
         diagnosticsToastCooldown = now;
-        showToast('Using cached demo data (backend unavailable)');
+        // More accurate toast for partial failures
+        showToast('Some requests failed; showing partial data');
       }
     }
   });
@@ -1167,6 +1187,12 @@ async function init() {
   recalculateManualDataSummaries();
 
   showToast('Dashboard loaded');
+
+  // Load manual summary (assets/liabilities totals + manual fields)
+  try {
+    const summary = await BackendAdapter.fetchManualSummary();
+    renderManualSummary(summary);
+  } catch (_) {}
 }
 
 function setupRefreshButton() {
@@ -1266,6 +1292,87 @@ async function boot() {
 }
 
 boot();
+
+// ---- Manual Liabilities/Assets UI wiring ----
+function readNumberInput(id, decimals = 2) {
+  const el = document.getElementById(id);
+  if (!el) return null;
+  if (el.value === '') return null;
+  const n = Number(el.value);
+  if (!Number.isFinite(n) || n < 0) return null;
+  const factor = Math.pow(10, decimals);
+  return Math.round(n * factor) / factor;
+}
+
+async function renderManualSummary(summary) {
+  if (!summary || !summary.calculated) return;
+  const ta = document.getElementById('total-assets-label');
+  const tl = document.getElementById('total-liabilities-label');
+  const te = document.getElementById('total-equity-balance');
+  if (ta) ta.textContent = `Total Assets: ${formatCurrency(summary.calculated.totalAssets)}`;
+  if (tl) tl.textContent = `Total Liabilities: ${formatCurrency(summary.calculated.totalLiabilities)}`;
+  if (te) te.textContent = `${formatCurrency(summary.calculated.totalEquity)}`;
+
+  const liab = (summary.manual && summary.manual.liabilities) || {};
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = (val == null ? '' : val); };
+  if (liab.heloc_loan) {
+    setVal('heloc-loan-amount', liab.heloc_loan.loanAmountUsd);
+    setVal('heloc-interest-rate', liab.heloc_loan.interestRatePct);
+    setVal('heloc-monthly-payment', liab.heloc_loan.monthlyPaymentUsd);
+    setVal('heloc-outstanding', liab.heloc_loan.outstandingBalanceUsd);
+  }
+  if (liab.original_mortgage_loan_672) {
+    setVal('m672-loan-amount', liab.original_mortgage_loan_672.loanAmountUsd);
+    setVal('m672-interest-rate', liab.original_mortgage_loan_672.interestRatePct);
+    setVal('m672-monthly-payment', liab.original_mortgage_loan_672.monthlyPaymentUsd);
+    setVal('m672-outstanding', liab.original_mortgage_loan_672.outstandingBalanceUsd);
+  }
+  if (liab.roof_loan) {
+    setVal('roof-loan-amount', liab.roof_loan.loanAmountUsd);
+    setVal('roof-interest-rate', liab.roof_loan.interestRatePct);
+    setVal('roof-monthly-payment', liab.roof_loan.monthlyPaymentUsd);
+    setVal('roof-outstanding', liab.roof_loan.outstandingBalanceUsd);
+  }
+  const asset = summary.manual && summary.manual.assets && summary.manual.assets['property_672_elm_value'];
+  if (asset && document.getElementById('asset-672-elm')) document.getElementById('asset-672-elm').value = asset.valueUsd ?? '';
+}
+
+async function saveManualLiability(slug, ids) {
+  const payload = {
+    loanAmountUsd: readNumberInput(ids.loan, 2),
+    interestRatePct: readNumberInput(ids.rate, 4),
+    monthlyPaymentUsd: readNumberInput(ids.monthly, 2),
+    outstandingBalanceUsd: readNumberInput(ids.outstanding, 2)
+  };
+  try {
+    const resp = await fetch(`/api/manual/liabilities/${slug}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    if (resp.status === 405) { showToast('Writes disabled by feature flag'); return; }
+    if (!resp.ok) throw new Error('save failed');
+    showToast('Saved');
+    const summary = await BackendAdapter.fetchManualSummary();
+    renderManualSummary(summary);
+  } catch (e) { showToast('Save failed'); }
+}
+
+async function saveManualAsset() {
+  const valueUsd = readNumberInput('asset-672-elm', 2);
+  try {
+    const resp = await fetch('/api/manual/assets/property_672_elm_value', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valueUsd }) });
+    if (resp.status === 405) { showToast('Writes disabled by feature flag'); return; }
+    if (!resp.ok) throw new Error('save failed');
+    showToast('Saved');
+    const summary = await BackendAdapter.fetchManualSummary();
+    renderManualSummary(summary);
+  } catch { showToast('Save failed'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+  bind('save-asset-672-elm', saveManualAsset);
+  bind('save-heloc', () => saveManualLiability('heloc_loan', { loan:'heloc-loan-amount', rate:'heloc-interest-rate', monthly:'heloc-monthly-payment', outstanding:'heloc-outstanding' }));
+  bind('save-m672', () => saveManualLiability('original_mortgage_loan_672', { loan:'m672-loan-amount', rate:'m672-interest-rate', monthly:'m672-monthly-payment', outstanding:'m672-outstanding' }));
+  bind('save-roof', () => saveManualLiability('roof_loan', { loan:'roof-loan-amount', rate:'roof-interest-rate', monthly:'roof-monthly-payment', outstanding:'roof-outstanding' }));
+});
 
 // Lazy-load Teller Connect SDK if missing
 async function ensureTellerScriptLoaded() {
