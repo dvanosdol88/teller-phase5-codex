@@ -457,3 +457,18 @@ For questions about tests:
 - See `test/README.md`
 - See `test/TESTING_OVERVIEW.md`
 - Check commit history for test changes
+
+
+
+## Read-Only Audit
+
+To infer the last change without modifying the backend, use:
+
+`ash
+BASE_URL= ./test/audit-readonly.sh
+`
+
+- Output includes: when, what, who, source (teller/cache/unknown)
+- No writes, no auth changes, no server changes.
+- Optional flags: VERBOSE=1, LIMIT=5
+
