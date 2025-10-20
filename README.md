@@ -23,6 +23,55 @@ BACKEND_URL=https://teller10-15a.onrender.com npm start
 # Visit http://localhost:3000
 ```
 
+## Version Control - Working Baseline Tags
+
+This project uses **working baseline** tags to mark stable, tested snapshots of the codebase.
+
+### What are working baseline tags?
+
+A working baseline tag represents a verified state of the code where:
+- All tests pass
+- Core functionality is operational
+- The deployment is stable and verified
+- Team can safely roll back to this point if needed
+
+### Tag naming convention
+
+Tags follow the format: `working-baseline-YYYYMMDD-HHMMSS`
+
+Example: `working-baseline-20251020-141421`
+
+### When to create a working baseline tag
+
+Create a working baseline tag when:
+1. **Completing a feature or phase** - After merging a PR that adds significant functionality
+2. **Before major changes** - Creating a safe restore point before risky refactoring
+3. **After successful deployment** - When Render deployment passes all verification tests
+4. **End of sprint/milestone** - Marking a stable point for team coordination
+
+### How to create a working baseline tag
+
+```bash
+# Create tag with timestamp
+git tag -a "working-baseline-$(date +%Y%m%d-%H%M%S)" -m "working baseline - $(date)"
+
+# Push to remote
+git push origin "working-baseline-$(date +%Y%m%d-%H%M%S)"
+```
+
+### How to restore to a working baseline
+
+```bash
+# List all working baseline tags
+git tag -l "working-baseline-*"
+
+# Checkout a specific baseline
+git checkout working-baseline-20251020-141421
+
+# Or create a new branch from it
+git checkout -b fix/issue-from-baseline working-baseline-20251020-141421
+```
+
 ### Manual Data backed by PostgreSQL (optional)
 
 Enable local manual-data endpoints served by this proxy and persist values to PostgreSQL.
