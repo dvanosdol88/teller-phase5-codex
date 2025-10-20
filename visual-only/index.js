@@ -983,6 +983,40 @@ function formatCurrency(value, currency = 'USD') {
   }
 }
 
+function formatTimestamp(isoString) {
+  if (!isoString) return 'Unknown';
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return 'Unknown';
+    
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    }).format(date);
+  } catch (err) {
+    console.error('Failed to format timestamp:', err);
+    return 'Unknown';
+  }
+}
+
+function updateDataTimestamp(timestamp) {
+  const timestampEl = document.getElementById('data-timestamp');
+  if (!timestampEl) return;
+  
+  if (timestamp) {
+    const formattedTime = formatTimestamp(timestamp);
+    timestampEl.textContent = `Data as of ${formattedTime}`;
+    timestampEl.style.display = 'block';
+  } else {
+    timestampEl.textContent = 'Data timestamp unavailable';
+    timestampEl.style.display = 'block';
+  }
+}
+
 function categorizeAccount(account) {
   const id = account.id.toLowerCase();
   
@@ -1008,6 +1042,7 @@ function categorizeAccount(account) {
 async function renderAccountCard(account) {
   const balance = await BackendAdapter.fetchCachedBalance(account.id);
   const balanceValue = balance?.available ?? 0;
+  const cachedAt = balance?.cached_at;
   
   const card = document.createElement('div');
   card.className = 'bg-slate-50 p-4 rounded-lg border border-slate-200 hover:border-indigo-300 transition-colors cursor-pointer';
@@ -1038,7 +1073,7 @@ async function renderAccountCard(account) {
     card.append(nameEl, balanceEl);
   }
   
-  return { card, balance: balanceValue };
+  return { card, balance: balanceValue, cachedAt };
 }
 
 async function calculateRentRoll(accounts) {
@@ -1094,6 +1129,7 @@ async function init() {
   
   let totalAssets = 0;
   let totalLiabilities = 0;
+  let mostRecentTimestamp = null;
   
   for (const account of accounts) {
     const category = categorizeAccount(account);
@@ -1102,8 +1138,12 @@ async function init() {
       continue;
     }
     
-    const { card, balance } = await renderAccountCard(account);
+    const { card, balance, cachedAt } = await renderAccountCard(account);
     accountRegistry.set(account.id, { ...account, balance });
+
+    if (cachedAt && (!mostRecentTimestamp || new Date(cachedAt) > new Date(mostRecentTimestamp))) {
+      mostRecentTimestamp = cachedAt;
+    }
 
     if (category === 'asset') {
       assetsContainer.appendChild(card);
@@ -1120,6 +1160,8 @@ async function init() {
   if (totalEquityValue) {
     totalEquityValue.textContent = formatCurrency(totalEquity);
   }
+
+  updateDataTimestamp(mostRecentTimestamp);
 
   await calculateRentRoll(accounts);
   recalculateManualDataSummaries();
