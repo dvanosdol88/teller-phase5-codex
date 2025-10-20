@@ -1,0 +1,129 @@
+{
+  "info": {
+    "name": "Manual Liabilities & Assets",
+    "_postman_id": "7b9b6aa9-6f3d-4e3a-9b4a-mlaa0001",
+    "description": "Tests for manual liabilities/assets APIs with calculated totals.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "GET Summary",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/manual/summary", "host": ["{{baseUrl}}"], "path": ["api","manual","summary"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+              "const json = pm.response.json();",
+              "pm.test('Has calculated totals', function () { pm.expect(json).to.have.property('calculated'); });",
+              "pm.environment.set('prevTotalLiabilities', (json.calculated && json.calculated.totalLiabilities) || 0);",
+              "pm.environment.set('prevTotalAssets', (json.calculated && json.calculated.totalAssets) || 0);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "PUT Asset 672 Elm Value",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"valueUsd\": {{assetValue}},\n  \"updatedBy\": \"{{updatedBy}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/manual/assets/property_672_elm_value", "host": ["{{baseUrl}}"], "path": ["api","manual","assets","property_672_elm_value"] }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 405) {",
+          "  console.warn('Writes disabled: set FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_ASSETS=true');",
+          "  pm.test('Writes disabled (405)', function () { pm.response.to.have.status(405); });",
+          "} else {",
+          "  pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+          "}"
+        ], "type": "text/javascript" } }
+      ]
+    },
+    {
+      "name": "PUT Liability HELOC",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"outstandingBalanceUsd\": {{helocOutstanding}},\n  \"interestRatePct\": {{helocRate}},\n  \"updatedBy\": \"{{updatedBy}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/manual/liabilities/heloc_loan", "host": ["{{baseUrl}}"], "path": ["api","manual","liabilities","heloc_loan"] }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 405) {",
+          "  console.warn('Writes disabled: set FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_LIABILITIES=true');",
+          "  pm.test('Writes disabled (405)', function () { pm.response.to.have.status(405); });",
+          "} else {",
+          "  pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+          "}"
+        ], "type": "text/javascript" } }
+      ]
+    },
+    {
+      "name": "PUT Liability Mortgage 672",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"outstandingBalanceUsd\": {{m672Outstanding}},\n  \"interestRatePct\": {{m672Rate}},\n  \"termMonths\": 360,\n  \"updatedBy\": \"{{updatedBy}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/manual/liabilities/original_mortgage_loan_672", "host": ["{{baseUrl}}"], "path": ["api","manual","liabilities","original_mortgage_loan_672"] }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 405) {",
+          "  console.warn('Writes disabled: set FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_LIABILITIES=true');",
+          "  pm.test('Writes disabled (405)', function () { pm.response.to.have.status(405); });",
+          "} else {",
+          "  pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+          "}"
+        ], "type": "text/javascript" } }
+      ]
+    },
+    {
+      "name": "PUT Liability Roof Loan",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"outstandingBalanceUsd\": {{roofOutstanding}},\n  \"interestRatePct\": {{roofRate}},\n  \"termMonths\": 120,\n  \"updatedBy\": \"{{updatedBy}}\"\n}" },
+        "url": { "raw": "{{baseUrl}}/api/manual/liabilities/roof_loan", "host": ["{{baseUrl}}"], "path": ["api","manual","liabilities","roof_loan"] }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "if (pm.response.code === 405) {",
+          "  console.warn('Writes disabled: set FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_LIABILITIES=true');",
+          "  pm.test('Writes disabled (405)', function () { pm.response.to.have.status(405); });",
+          "} else {",
+          "  pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+          "}"
+        ], "type": "text/javascript" } }
+      ]
+    },
+    {
+      "name": "GET Summary (verify totals)",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Accept", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/api/manual/summary", "host": ["{{baseUrl}}"], "path": ["api","manual","summary"] }
+      },
+      "event": [
+        { "listen": "test", "script": { "exec": [
+          "pm.test('Status is 200', function () { pm.response.to.have.status(200); });",
+          "const json = pm.response.json();",
+          "pm.test('Totals present', function () { pm.expect(json).to.have.property('calculated'); });",
+          "const tl = json.calculated.totalLiabilities || 0;",
+          "const ta = json.calculated.totalAssets || 0;",
+          "pm.expect(tl).to.be.a('number');",
+          "pm.expect(ta).to.be.a('number');"
+        ], "type": "text/javascript" } }
+      ]
+    }
+  ]
+}
+

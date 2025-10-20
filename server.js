@@ -565,7 +565,14 @@ app.get('/api/manual/summary', async (req, res) => {
     const accounts = getAccounts();
     const tellerTotal = accounts.reduce((acc, a) => {
       const bal = getBalanceByAccountId(a.id);
-      return acc + (bal && typeof bal.available === 'number' ? bal.available : 0);
+      if (!bal) return acc;
+      // Support both shapes: { available } or { balance: { available } }
+      const available = (bal && typeof bal.available === 'number')
+        ? bal.available
+        : (bal.balance && typeof bal.balance.available === 'number')
+          ? bal.balance.available
+          : 0;
+      return acc + available;
     }, 0);
 
     const manualAsset = Number(asset.valueUsd) || 0;
