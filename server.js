@@ -9,15 +9,48 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const BACKEND_URL = process.env.BACKEND_URL || 'https://teller10-15a.onrender.com';
 const FEATURE_MANUAL_DATA = String(process.env.FEATURE_MANUAL_DATA || '').toLowerCase() === 'true';
+const FEATURE_STATIC_DB = String(process.env.FEATURE_STATIC_DB || '').toLowerCase() === 'true';
 const MANUAL_DATA_READONLY = String(process.env.MANUAL_DATA_READONLY || '').toLowerCase() === 'true';
 const MANUAL_DATA_DRY_RUN = String(process.env.MANUAL_DATA_DRY_RUN || '').toLowerCase() === 'true';
+const MANUAL_DATA_MIGRATION_SECRET = process.env.MANUAL_DATA_MIGRATION_SECRET || '';
 const DATABASE_URL = process.env.DATABASE_URL;
 
-const FALLBACK_CONFIG = {
+const BASE_CONFIG = {
   apiBaseUrl: '/api',
   FEATURE_USE_BACKEND: true,
-  FEATURE_MANUAL_DATA
+  FEATURE_MANUAL_DATA,
+  FEATURE_STATIC_DB
 };
+
+function computeBackendMode(config) {
+  if (config.FEATURE_STATIC_DB) {
+    return 'static';
+  }
+  if (!config.FEATURE_USE_BACKEND) {
+    return 'disabled';
+  }
+  return 'live';
+}
+
+function enforceServerGuards(config) {
+  const next = { ...BASE_CONFIG, ...config };
+
+  // Manual data can only be enabled when the environment allows it
+  next.FEATURE_MANUAL_DATA = Boolean(FEATURE_MANUAL_DATA && next.FEATURE_MANUAL_DATA);
+
+  // When static demo data is enabled, always short-circuit backend usage
+  next.FEATURE_STATIC_DB = Boolean(FEATURE_STATIC_DB || next.FEATURE_STATIC_DB);
+  if (next.FEATURE_STATIC_DB) {
+    next.FEATURE_USE_BACKEND = false;
+  } else {
+    next.FEATURE_USE_BACKEND = Boolean(next.FEATURE_USE_BACKEND);
+  }
+
+  next.backendMode = computeBackendMode(next);
+  return next;
+}
+
+const FALLBACK_CONFIG = enforceServerGuards(BASE_CONFIG);
 
 // Manual data store (PostgreSQL)
 let manualStore = null;
@@ -33,7 +66,7 @@ function validateConfigPayload(payload) {
   }
 
   const sanitizedConfig = {
-    ...FALLBACK_CONFIG,
+    ...BASE_CONFIG,
     apiBaseUrl: payload.apiBaseUrl.trim()
   };
 
@@ -53,7 +86,23 @@ function validateConfigPayload(payload) {
     }
   }
 
-  return sanitizedConfig;
+  if (Object.prototype.hasOwnProperty.call(payload, 'FEATURE_STATIC_DB')) {
+    if (typeof payload.FEATURE_STATIC_DB === 'boolean') {
+      sanitizedConfig.FEATURE_STATIC_DB = payload.FEATURE_STATIC_DB;
+    } else {
+      console.warn('[config] Ignoring invalid FEATURE_STATIC_DB value from backend payload');
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(payload, 'backendMode')) {
+    if (typeof payload.backendMode === 'string') {
+      sanitizedConfig.backendMode = payload.backendMode;
+    } else {
+      console.warn('[config] Ignoring invalid backendMode value from backend payload');
+    }
+  }
+
+  return enforceServerGuards(sanitizedConfig);
 }
 
 async function fetchBackendConfig() {
@@ -82,6 +131,7 @@ async function fetchBackendConfig() {
 console.log(`[server] Starting proxy server on port ${PORT}`);
 console.log(`[server] Backend URL: ${BACKEND_URL}`);
 console.log(`[server] FEATURE_MANUAL_DATA: ${FEATURE_MANUAL_DATA}`);
+console.log(`[server] FEATURE_STATIC_DB: ${FEATURE_STATIC_DB}`);
 if (FEATURE_MANUAL_DATA) {
   console.log(`[server] MANUAL_DATA_READONLY: ${MANUAL_DATA_READONLY}`);
   console.log(`[server] MANUAL_DATA_DRY_RUN: ${MANUAL_DATA_DRY_RUN}`);
@@ -108,57 +158,63 @@ app.get('/api/config', async (req, res) => {
   }
 });
 
-app.get('/api/db/accounts', (req, res) => {
-  const accounts = getAccounts();
-  res.json({ accounts });
-});
+if (FEATURE_STATIC_DB) {
+  console.log('[server] Static dataset routes enabled (demo mode)');
 
-app.get('/api/db/accounts/:accountId/balances', (req, res) => {
-  const { accountId } = req.params;
-  const account = getAccountById(accountId);
-  if (!account) {
-    res.status(404).json({ error: 'Account not found' });
-    return;
-  }
+  app.get('/api/db/accounts', (req, res) => {
+    const accounts = getAccounts();
+    res.json({ accounts });
+  });
 
-  const balance = getBalanceByAccountId(accountId);
-  if (!balance) {
-    res.status(404).json({ error: 'Balance not found' });
-    return;
-  }
-
-  res.json(balance);
-});
-
-app.get('/api/db/accounts/:accountId/transactions', (req, res) => {
-  const { accountId } = req.params;
-  const account = getAccountById(accountId);
-  if (!account) {
-    res.status(404).json({ error: 'Account not found' });
-    return;
-  }
-
-  const { limit: limitQuery } = req.query;
-  let limit = undefined;
-  if (limitQuery !== undefined) {
-    const parsed = Number(limitQuery);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      res.status(400).json({ error: 'limit must be a positive number' });
+  app.get('/api/db/accounts/:accountId/balances', (req, res) => {
+    const { accountId } = req.params;
+    const account = getAccountById(accountId);
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
       return;
     }
-    limit = Math.floor(parsed);
-  } else {
-    limit = 10;
-  }
 
-  const transactions = getTransactionsByAccountId(accountId, limit);
-  if (!transactions) {
-    res.status(404).json({ error: 'Transactions not found' });
-    return;
-  }
+    const balance = getBalanceByAccountId(accountId);
+    if (!balance) {
+      res.status(404).json({ error: 'Balance not found' });
+      return;
+    }
 
-  res.json(transactions);
-});
+    res.json(balance);
+  });
+
+  app.get('/api/db/accounts/:accountId/transactions', (req, res) => {
+    const { accountId } = req.params;
+    const account = getAccountById(accountId);
+    if (!account) {
+      res.status(404).json({ error: 'Account not found' });
+      return;
+    }
+
+    const { limit: limitQuery } = req.query;
+    let limit = undefined;
+    if (limitQuery !== undefined) {
+      const parsed = Number(limitQuery);
+      if (!Number.isFinite(parsed) || parsed <= 0) {
+        res.status(400).json({ error: 'limit must be a positive number' });
+        return;
+      }
+      limit = Math.floor(parsed);
+    } else {
+      limit = 10;
+    }
+
+    const transactions = getTransactionsByAccountId(accountId, limit);
+    if (!transactions) {
+      res.status(404).json({ error: 'Transactions not found' });
+      return;
+    }
+
+    res.json(transactions);
+  });
+} else {
+  console.log('[server] Static dataset routes disabled; proxy will service /api/db requests');
+}
 
 // Optional PostgreSQL-backed Manual Data store setup
 async function setupManualDataStore() {
@@ -257,45 +313,56 @@ app.get('/api/healthz', async (req, res) => {
   res.json(result);
 });
 
-// TEMPORARY: Migration endpoint to drop FK constraint
-app.post('/api/migrate/drop-manual-data-fk', async (req, res) => {
-  if (!FEATURE_MANUAL_DATA || !manualStore) {
-    return res.status(503).json({ error: 'manual_data_not_enabled' });
-  }
-  
-  try {
-    const steps = [];
-    
-    // Show current constraints
-    const before = await manualStore.pool.query(
-      "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
-    );
-    steps.push({ step: 'before', constraints: before.rows.map(r => r.conname) });
-    
-    // Drop FK constraint
-    await manualStore.pool.query('ALTER TABLE manual_data DROP CONSTRAINT IF EXISTS manual_data_account_id_fkey');
-    steps.push({ step: 'drop_fk', status: 'done' });
-    
-    // Create index
-    await manualStore.pool.query('CREATE INDEX IF NOT EXISTS idx_manual_data_account_id ON manual_data(account_id)');
-    steps.push({ step: 'create_index', status: 'done' });
-    
-    // Add comment
-    await manualStore.pool.query("COMMENT ON TABLE manual_data IS 'Manual rent-roll per account; FK to accounts is optional and may be enforced externally.'");
-    steps.push({ step: 'add_comment', status: 'done' });
-    
-    // Show final constraints
-    const after = await manualStore.pool.query(
-      "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
-    );
-    steps.push({ step: 'after', constraints: after.rows.map(r => r.conname) });
-    
-    res.json({ success: true, steps });
-  } catch (error) {
-    console.error('[migrate] Failed:', error);
-    res.status(500).json({ error: 'migration_failed', message: error.message });
-  }
-});
+if (MANUAL_DATA_MIGRATION_SECRET) {
+  console.log('[manual-data] Migration endpoint protected by MANUAL_DATA_MIGRATION_SECRET');
+
+  // TEMPORARY: Migration endpoint to drop FK constraint (guarded by shared secret header)
+  app.post('/api/migrate/drop-manual-data-fk', async (req, res) => {
+    if (!FEATURE_MANUAL_DATA || !manualStore) {
+      return res.status(503).json({ error: 'manual_data_not_enabled' });
+    }
+
+    const providedSecret = req.get('x-manual-data-migration-secret');
+    if (!providedSecret || providedSecret !== MANUAL_DATA_MIGRATION_SECRET) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+
+    try {
+      const steps = [];
+
+      // Show current constraints
+      const before = await manualStore.pool.query(
+        "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
+      );
+      steps.push({ step: 'before', constraints: before.rows.map(r => r.conname) });
+
+      // Drop FK constraint
+      await manualStore.pool.query('ALTER TABLE manual_data DROP CONSTRAINT IF EXISTS manual_data_account_id_fkey');
+      steps.push({ step: 'drop_fk', status: 'done' });
+
+      // Create index
+      await manualStore.pool.query('CREATE INDEX IF NOT EXISTS idx_manual_data_account_id ON manual_data(account_id)');
+      steps.push({ step: 'create_index', status: 'done' });
+
+      // Add comment
+      await manualStore.pool.query("COMMENT ON TABLE manual_data IS 'Manual rent-roll per account; FK to accounts is optional and may be enforced externally.'");
+      steps.push({ step: 'add_comment', status: 'done' });
+
+      // Show final constraints
+      const after = await manualStore.pool.query(
+        "SELECT conname FROM pg_constraint WHERE conrelid = 'manual_data'::regclass"
+      );
+      steps.push({ step: 'after', constraints: after.rows.map(r => r.conname) });
+
+      res.json({ success: true, steps });
+    } catch (error) {
+      console.error('[migrate] Failed:', error);
+      res.status(500).json({ error: 'migration_failed', message: error.message });
+    }
+  });
+} else {
+  console.log('[manual-data] Migration endpoint disabled (no MANUAL_DATA_MIGRATION_SECRET provided)');
+}
 
 // Manual field endpoints (property, heloc, mortgage)
 // Property

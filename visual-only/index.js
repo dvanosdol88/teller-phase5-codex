@@ -238,6 +238,7 @@ const BackendAdapter = (() => {
     apiBaseUrl: "/api",
     bearerToken: undefined,
     diagnostics: loadStoredDiagnostics(),
+    backendStatus: { mode: 'unknown', message: '' }
   };
 
   function persistDiagnostics() {
@@ -261,6 +262,25 @@ const BackendAdapter = (() => {
     }
   }
 
+  function emitStatusUpdate() {
+    try {
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('backend:status', { detail: { ...state.backendStatus } }));
+      }
+    } catch (err) {
+      console.warn('[BackendAdapter] Failed to emit backend status event:', err);
+    }
+  }
+
+  function setBackendStatus(mode, message = '') {
+    const next = { mode, message };
+    const changed = state.backendStatus.mode !== next.mode || state.backendStatus.message !== next.message;
+    state.backendStatus = next;
+    if (changed) {
+      emitStatusUpdate();
+    }
+  }
+
   function recordDiagnostic(endpoint, error) {
     const entry = {
       endpoint,
@@ -270,6 +290,9 @@ const BackendAdapter = (() => {
     state.diagnostics.push(entry);
     state.diagnostics = state.diagnostics.slice(-20);
     persistDiagnostics();
+    if (isBackendEnabled()) {
+      setBackendStatus('degraded', 'Live backend request failed; using cached data');
+    }
     console.warn('[BackendAdapter] Falling back to mock data:', entry);
     emitDiagnosticsUpdate(entry);
   }
@@ -284,37 +307,69 @@ const BackendAdapter = (() => {
     return state.diagnostics.slice();
   }
 
+  function getBackendStatus() {
+    return { ...state.backendStatus };
+  }
+
   function isBackendEnabled() {
     return Boolean(window.FEATURE_USE_BACKEND);
   }
 
+  function markBackendHealthy() {
+    if (isBackendEnabled()) {
+      setBackendStatus('live', '');
+    }
+  }
+
   async function loadConfig() {
+    let backendEnabled = Boolean(window.FEATURE_USE_BACKEND);
+    let manualDataEnabled = Boolean(window.FEATURE_MANUAL_DATA);
+
     try {
       if (typeof location !== 'undefined' && location.protocol === 'file:') {
+        setBackendStatus(backendEnabled ? 'live' : 'demo', backendEnabled ? '' : 'Running in local mock mode');
         return {
-          enabled: Boolean(window.FEATURE_USE_BACKEND),
-          manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
+          enabled: backendEnabled,
+          manualDataEnabled,
           apiBaseUrl: state.apiBaseUrl
         };
       }
       const resp = await fetch('/api/config', { headers: { Accept: 'application/json' } });
-      if (resp && resp.ok) {
-        const cfg = await resp.json().catch(() => ({}));
-        if (cfg && typeof cfg.apiBaseUrl === 'string' && cfg.apiBaseUrl.trim()) {
-          state.apiBaseUrl = cfg.apiBaseUrl;
-        }
-        if (cfg && typeof cfg.FEATURE_USE_BACKEND === 'boolean') {
-          window.FEATURE_USE_BACKEND = cfg.FEATURE_USE_BACKEND;
-        }
-        if (cfg && typeof cfg.FEATURE_MANUAL_DATA === 'boolean') {
-          window.FEATURE_MANUAL_DATA = cfg.FEATURE_MANUAL_DATA;
-        } else {
-          window.FEATURE_MANUAL_DATA = false;
-        }
+      if (!resp || !resp.ok) {
+        throw new Error(`config request failed with status ${resp ? resp.status : 'unknown'}`);
+      }
+      const cfg = await resp.json().catch(() => ({}));
+      if (cfg && typeof cfg.apiBaseUrl === 'string' && cfg.apiBaseUrl.trim()) {
+        state.apiBaseUrl = cfg.apiBaseUrl;
+      }
+      if (cfg && typeof cfg.FEATURE_STATIC_DB === 'boolean') {
+        window.FEATURE_STATIC_DB = cfg.FEATURE_STATIC_DB;
+      } else {
+        window.FEATURE_STATIC_DB = Boolean(window.FEATURE_STATIC_DB);
+      }
+      if (cfg && typeof cfg.FEATURE_USE_BACKEND === 'boolean') {
+        backendEnabled = cfg.FEATURE_USE_BACKEND;
+      }
+      window.FEATURE_USE_BACKEND = backendEnabled;
+
+      if (cfg && typeof cfg.FEATURE_MANUAL_DATA === 'boolean') {
+        manualDataEnabled = cfg.FEATURE_MANUAL_DATA;
+      }
+      window.FEATURE_MANUAL_DATA = Boolean(manualDataEnabled);
+
+      const backendMode = (cfg && typeof cfg.backendMode === 'string') ? cfg.backendMode : (window.FEATURE_STATIC_DB ? 'static' : (backendEnabled ? 'live' : 'disabled'));
+      if (backendMode === 'static') {
+        setBackendStatus('demo', 'Proxy is serving cached demo data');
+      } else if (backendMode === 'disabled' || !backendEnabled) {
+        setBackendStatus('disabled', 'Live backend disabled via configuration');
+      } else {
+        setBackendStatus('live', '');
       }
     } catch (err) {
       recordDiagnostic('GET /api/config', err);
+      setBackendStatus('degraded', 'Unable to load backend configuration; using cached data');
     }
+
     return {
       enabled: Boolean(window.FEATURE_USE_BACKEND),
       manualDataEnabled: Boolean(window.FEATURE_MANUAL_DATA),
@@ -340,6 +395,7 @@ const BackendAdapter = (() => {
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts`, { headers: headers() });
       if (!resp.ok) throw new Error("accounts failed");
       const data = await resp.json();
+      markBackendHealthy();
       return (data.accounts || []).map(a => ({
         id: a.id,
         name: a.name,
@@ -361,6 +417,7 @@ const BackendAdapter = (() => {
       const resp = await fetch(`${state.apiBaseUrl}/db/accounts/${encodeURIComponent(accountId)}/balances`, { headers: headers() });
       if (!resp.ok) throw new Error("balance failed");
       const data = await resp.json();
+      markBackendHealthy();
       return { ...data.balance, cached_at: data.cached_at };
     } catch (err) {
       recordDiagnostic(`GET /db/accounts/${accountId}/balances`, err);
@@ -404,6 +461,7 @@ const BackendAdapter = (() => {
         return updateManualDataStore(accountId, fallback, { skipNotify });
       }
       const payload = await resp.json().catch(() => ({ account_id: accountId, rent_roll: null, updated_at: null }));
+      markBackendHealthy();
       return updateManualDataStore(accountId, payload, { skipNotify });
     } catch (err) {
       recordDiagnostic(`GET /db/accounts/${accountId}/manual-data`, err);
@@ -468,7 +526,8 @@ const BackendAdapter = (() => {
     saveManualData: (accountId, rentRoll) => persistManualData(accountId, rentRoll),
     clearManualData: (accountId) => persistManualData(accountId, null),
     getDiagnostics,
-    clearDiagnostics
+    clearDiagnostics,
+    getBackendStatus
   };
 })();
 
@@ -821,6 +880,8 @@ function setupDiagnosticsBanner() {
   const detailEl = document.getElementById('diagnostics-detail');
   const timestampEl = document.getElementById('diagnostics-timestamp');
   const dismissBtn = document.getElementById('diagnostics-dismiss');
+  const headlineEl = document.getElementById('diagnostics-headline');
+  const cardEl = document.getElementById('diagnostics-card');
 
   if (!banner || !detailEl) {
     if (document.readyState === 'loading') {
@@ -833,22 +894,47 @@ function setupDiagnosticsBanner() {
 
   function renderDiagnosticsBanner() {
     const diagnostics = BackendAdapter.getDiagnostics();
-    if (!diagnostics || diagnostics.length === 0) {
+    const status = BackendAdapter.getBackendStatus();
+    const latestDiagnostic = diagnostics && diagnostics.length > 0 ? diagnostics[diagnostics.length - 1] : null;
+    const statusMode = status?.mode || 'unknown';
+
+    if (!latestDiagnostic && (!status || statusMode === 'live' || statusMode === 'unknown')) {
       banner.classList.add('hidden');
+      if (headlineEl) headlineEl.textContent = 'Using cached demo data';
       if (detailEl) detailEl.textContent = '';
       if (timestampEl) timestampEl.textContent = '';
       return;
     }
 
-    const latest = diagnostics[diagnostics.length - 1];
     banner.classList.remove('hidden');
-    detailEl.textContent = `${latest.endpoint}: ${latest.message}`;
-    if (timestampEl) {
-      try {
-        const when = new Date(latest.timestamp);
-        timestampEl.textContent = `Last fallback at ${when.toLocaleString()}`;
-      } catch {
-        timestampEl.textContent = latest.timestamp ? `Last fallback at ${latest.timestamp}` : '';
+
+    if (latestDiagnostic) {
+      if (headlineEl) headlineEl.textContent = 'Backend fallback active';
+      detailEl.textContent = `${latestDiagnostic.endpoint}: ${latestDiagnostic.message}`;
+      if (timestampEl) {
+        try {
+          const when = new Date(latestDiagnostic.timestamp);
+          timestampEl.textContent = `Last fallback at ${when.toLocaleString()}`;
+        } catch {
+          timestampEl.textContent = latestDiagnostic.timestamp ? `Last fallback at ${latestDiagnostic.timestamp}` : '';
+        }
+      }
+    } else if (status) {
+      let headline = 'Backend status';
+      if (statusMode === 'demo') headline = 'Demo data mode';
+      if (statusMode === 'disabled') headline = 'Live backend disabled';
+      if (statusMode === 'degraded') headline = 'Backend unavailable';
+      if (headlineEl) headlineEl.textContent = headline;
+      detailEl.textContent = status.message || 'The dashboard is using cached data.';
+      if (timestampEl) timestampEl.textContent = '';
+    }
+
+    if (cardEl) {
+      cardEl.classList.remove('bg-amber-100', 'border-amber-500', 'text-amber-900', 'bg-sky-100', 'border-sky-500', 'text-sky-900');
+      if (statusMode === 'disabled') {
+        cardEl.classList.add('bg-sky-100', 'border-sky-500', 'text-sky-900');
+      } else {
+        cardEl.classList.add('bg-amber-100', 'border-amber-500', 'text-amber-900');
       }
     }
   }
@@ -862,6 +948,20 @@ function setupDiagnosticsBanner() {
       if (now - diagnosticsToastCooldown > 4000) {
         diagnosticsToastCooldown = now;
         showToast('Using cached demo data (backend unavailable)');
+      }
+    }
+  });
+
+  window.addEventListener('backend:status', (event) => {
+    renderDiagnosticsBanner();
+    const detail = event && event.detail;
+    if (!detail) return;
+    if (detail.mode === 'degraded' || detail.mode === 'demo' || detail.mode === 'disabled') {
+      const now = Date.now();
+      if (now - diagnosticsToastCooldown > 4000) {
+        diagnosticsToastCooldown = now;
+        const message = detail.message || 'Backend unavailable; showing cached data';
+        showToast(message);
       }
     }
   });

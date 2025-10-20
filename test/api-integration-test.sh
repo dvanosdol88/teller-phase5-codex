@@ -77,6 +77,90 @@ echo "Base URL: $BASE_URL"
 echo "Test Account: ${ACC:-<auto>}"
 echo ""
 
+CONFIG_JSON=$(curl -sS "$BASE_URL/api/config" || true)
+if [ -n "$CONFIG_JSON" ]; then
+  FEATURE_USE_BACKEND=$(echo "$CONFIG_JSON" | python3 - <<'PY'
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('false')
+    raise SystemExit
+print('true' if data.get('FEATURE_USE_BACKEND') else 'false')
+PY
+  )
+  FEATURE_STATIC_DB=$(echo "$CONFIG_JSON" | python3 - <<'PY'
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('false')
+    raise SystemExit
+print('true' if data.get('FEATURE_STATIC_DB') else 'false')
+PY
+  )
+  BACKEND_MODE=$(echo "$CONFIG_JSON" | python3 - <<'PY'
+import sys, json
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    print('unknown')
+    raise SystemExit
+print(data.get('backendMode') or 'unknown')
+PY
+  )
+  echo "Configuration: FEATURE_USE_BACKEND=$FEATURE_USE_BACKEND, FEATURE_STATIC_DB=$FEATURE_STATIC_DB, backendMode=$BACKEND_MODE"
+  if [ "$FEATURE_USE_BACKEND" = "true" ] && [ "$FEATURE_STATIC_DB" = "true" ]; then
+    log_error "Backend is enabled but static demo routes are also active."
+    exit 1
+  fi
+else
+  log_warn "Unable to fetch /api/config"
+fi
+
+if [ "$FEATURE_USE_BACKEND" = "true" ] && [ "$FEATURE_STATIC_DB" != "true" ]; then
+  echo ""
+  echo "Verifying live backend proxy path..."
+  proxy_tmp=$(mktemp)
+  proxy_status=$(curl -sS -w '%{http_code}' -o "$proxy_tmp" "$BASE_URL/api/db/accounts" || echo "000")
+  if [ "$proxy_status" = "200" ]; then
+    python3 - "$proxy_tmp" <<'PY'
+import json, sys
+from pathlib import Path
+
+STATIC_IDS = {
+    "acc_llc_operating",
+    "acc_llc_reserve",
+    "acc_llc_credit",
+    "acc_property_tax",
+}
+
+payload = {}
+try:
+    payload = json.loads(Path(sys.argv[1]).read_text())
+except Exception:
+    print("[WARN] Unable to parse accounts payload")
+    raise SystemExit
+
+accounts = payload.get('accounts') or []
+ids = {acc.get('id') for acc in accounts if isinstance(acc, dict)}
+if ids and ids.issubset(STATIC_IDS):
+    print("[ERROR] Proxy returned only static dataset accounts while backend mode is enabled.")
+    raise SystemExit(1)
+print("[INFO] Proxy accounts response differs from static dataset (or is empty).")
+PY
+    proxy_check_status=$?
+    rm "$proxy_tmp"
+    if [ "$proxy_check_status" -ne 0 ]; then
+      exit 1
+    fi
+  else
+    rm "$proxy_tmp"
+    log_warn "Proxy check received status $proxy_status; skipping static dataset assertion."
+  fi
+fi
+
+
 # Auto-discover an existing account ID if not provided
 if [ -z "$ACC" ]; then
   DISCOVER_JSON=$(curl -sS "$BASE_URL/api/db/accounts" || true)
