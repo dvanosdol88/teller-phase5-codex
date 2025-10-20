@@ -404,14 +404,32 @@ app.use('/api', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req, res) => {
     console.log(`[proxy] ${req.method} ${req.url} -> ${BACKEND_URL}${req.url}`);
-    if (!req.readable && req.body && Object.keys(req.body).length > 0) {
-      const bodyData = JSON.stringify(req.body);
-      const reqContentType = req.headers['content-type'];
-      if (reqContentType && !proxyReq.getHeader('Content-Type')) {
+    if (req.readable === false && req.body !== undefined) {
+      let payloadBuffer = null;
+
+      if (req.rawBody && Buffer.isBuffer(req.rawBody)) {
+        payloadBuffer = req.rawBody;
+      } else if (Buffer.isBuffer(req.body)) {
+        payloadBuffer = req.body;
+      } else {
+        let serialized;
+        if (req.body === null) {
+          serialized = 'null';
+        } else if (typeof req.body === 'string') {
+          serialized = req.body;
+        } else {
+          serialized = JSON.stringify(req.body);
+        }
+        payloadBuffer = Buffer.from(serialized);
+      }
+
+      if (!proxyReq.getHeader('Content-Type')) {
+        const reqContentType = req.headers['content-type'] || 'application/json';
         proxyReq.setHeader('Content-Type', reqContentType);
       }
-      proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-      proxyReq.write(bodyData);
+
+      proxyReq.setHeader('Content-Length', Buffer.byteLength(payloadBuffer));
+      proxyReq.write(payloadBuffer);
       proxyReq.end();
     }
   },
