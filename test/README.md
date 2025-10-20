@@ -4,6 +4,8 @@
 
 Automated test suite for the manual data endpoints.
 
+Additional focused tests are available for manual liabilities/assets summary and write gating.
+
 ### Usage
 
 ```bash
@@ -18,6 +20,9 @@ VERBOSE=1 ./test/api-integration-test.sh
 
 # Custom account ID
 ACC=acc_custom ./test/api-integration-test.sh
+
+# Run liabilities/assets summary tests (local dev)
+BASE_URL=http://127.0.0.1:3000 bash test/manual-liabilities-assets-test.sh
 
 ### Contract Tests
 
