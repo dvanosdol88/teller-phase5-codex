@@ -4,6 +4,7 @@ const path = require('path');
 const { getAccounts, getAccountById, getBalanceByAccountId, getTransactionsByAccountId } = require('./lib/dataStore');
 const { PgManualDataStore } = require('./lib/pgManualDataStore');
 const { ManualFieldsStore } = require('./lib/manualFieldsStore');
+const { SlugManualStore, LIABILITY_SLUGS, ASSET_SLUG } = require('./lib/slugManualStore');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -22,6 +23,7 @@ const FALLBACK_CONFIG = {
 // Manual data store (PostgreSQL)
 let manualStore = null;
 let manualFields = null;
+let slugManual = null;
 
 function validateConfigPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -174,6 +176,10 @@ async function setupManualDataStore() {
   manualFields = new ManualFieldsStore({ connectionString: DATABASE_URL });
   await manualFields.init();
   console.log('[manual-data] Manual fields tables ensured');
+
+  slugManual = new SlugManualStore({ connectionString: DATABASE_URL });
+  await slugManual.init();
+  console.log('[manual-data] Slug-based manual tables ensured');
 }
 // Manual data routes using PostgreSQL store
 app.get('/api/db/accounts/:accountId/manual-data', async (req, res) => {
@@ -476,3 +482,67 @@ async function cleanupAndExit(signal) {
 
 process.on('SIGINT', () => cleanupAndExit('SIGINT'));
 process.on('SIGTERM', () => cleanupAndExit('SIGTERM'));
+
+// ---------------- Slug-based Manual Endpoints & Summary -----------------
+const FEATURE_MANUAL_LIAB = String(process.env.FEATURE_MANUAL_LIABILITIES || '').toLowerCase() === 'true';
+const FEATURE_MANUAL_ASSETS = String(process.env.FEATURE_MANUAL_ASSETS || '').toLowerCase() === 'true';
+
+// Read summary combining manual + calculated totals
+app.get('/api/manual/summary', async (req, res) => {
+  try {
+    const liabilities = slugManual ? await slugManual.getAllLiabilities() : {};
+    const asset = slugManual ? await slugManual.getAssetValue() : { slug: ASSET_SLUG, valueUsd: 0 };
+    const liabSum = Object.values(liabilities).reduce((acc, l) => acc + (Number(l.outstandingBalanceUsd) || 0), 0);
+
+    // Teller balances sum via local dataStore helpers
+    const accounts = getAccounts();
+    const tellerTotal = accounts.reduce((acc, a) => {
+      const bal = getBalanceByAccountId(a.id);
+      return acc + (bal && typeof bal.available === 'number' ? bal.available : 0);
+    }, 0);
+
+    const manualAsset = Number(asset.valueUsd) || 0;
+    const totalAssets = tellerTotal + manualAsset;
+    const totalLiabilities = liabSum;
+    const totalEquity = totalAssets - totalLiabilities;
+
+    return res.json({
+      manual: {
+        liabilities,
+        assets: { [ASSET_SLUG]: { valueUsd: asset.valueUsd, updatedAt: asset.updatedAt, updatedBy: asset.updatedBy } }
+      },
+      calculated: { totalAssets, totalLiabilities, totalEquity }
+    });
+  } catch (e) {
+    console.error('[manual-summary] error', e.message);
+    res.status(500).json({ error: 'failed_manual_summary' });
+  }
+});
+
+// Update a liability by slug
+app.put('/api/manual/liabilities/:slug', jsonParser, async (req, res) => {
+  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_LIAB) return res.status(405).json({ error: 'manual_liabilities_disabled' });
+  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
+  try {
+    const { slug } = req.params;
+    if (!LIABILITY_SLUGS.has(slug)) return res.status(400).json({ error: 'unknown_slug' });
+    const { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths, updatedBy } = req.body || {};
+    const result = await slugManual.updateLiability(slug, { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths }, updatedBy || null);
+    res.json({ ok: true, liabilities: result });
+  } catch (e) {
+    res.status(400).json({ error: 'validation_failed', message: e.message });
+  }
+});
+
+// Update the single manual asset value
+app.put('/api/manual/assets/property_672_elm_value', jsonParser, async (req, res) => {
+  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_ASSETS) return res.status(405).json({ error: 'manual_assets_disabled' });
+  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
+  try {
+    const { valueUsd, updatedBy } = req.body || {};
+    const result = await slugManual.updateAssetValue(valueUsd, updatedBy || null);
+    res.json({ ok: true, asset: result });
+  } catch (e) {
+    res.status(400).json({ error: 'validation_failed', message: e.message });
+  }
+});
