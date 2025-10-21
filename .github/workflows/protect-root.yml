@@ -1,0 +1,60 @@
+name: Protect Root and Key Directories
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  guard-deletions:
+    name: Guard against destructive deletions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect deleted files
+        id: detect
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          echo "Comparing $BASE...$HEAD"
+          git diff --name-status "$BASE" "$HEAD" | tee diff.txt
+          echo "diff_lines=$(wc -l < diff.txt)" >> $GITHUB_OUTPUT
+
+      - name: Fail if deleting protected paths
+        if: steps.detect.outputs.diff_lines != '0'
+        run: |
+          set -e
+          PROTECTED_DIRS="^visual-only/|^docs/|^lib/|^test/"
+          PROTECTED_FILES="^(server\.js|package\.json|package-lock\.json|README\.md|DEPLOYMENT_STATUS\.md)$"
+
+          blocked=0
+          while IFS=$'\t' read -r status path || [[ -n "$status$path" ]]; do
+            if [[ "$status" == D* ]]; then
+              # Root-level file deletion (no slash)
+              if [[ "$path" != *"/"* ]]; then
+                echo "❌ Deleting root file blocked: $path"
+                blocked=1
+              fi
+              # Protected files anywhere at root
+              if [[ "$path" =~ $PROTECTED_FILES ]]; then
+                echo "❌ Deleting protected file blocked: $path"
+                blocked=1
+              fi
+              # Deleting protected directories or their contents
+              if echo "$path" | grep -Eq "$PROTECTED_DIRS"; then
+                echo "❌ Deleting protected directory content blocked: $path"
+                blocked=1
+              fi
+            fi
+          done < diff.txt
+
+          if [ "$blocked" -eq 1 ]; then
+            echo "\nThis PR attempts to delete protected paths."
+            echo "Please consult CODEOWNERS and request approval from @githubber @DVO."
+            exit 1
+          else
+            echo "No protected deletions detected."
+          fi

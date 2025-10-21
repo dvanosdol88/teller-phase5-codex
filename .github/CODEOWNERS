@@ -1,0 +1,12 @@
+# Require review from code owners for any change at repo root or key directories
+* @githubber @DVO
+/
+/server.js @githubber @DVO
+/package.json @githubber @DVO
+/package-lock.json @githubber @DVO
+/README.md @githubber @DVO
+/DEPLOYMENT_STATUS.md @githubber @DVO
+/visual-only/ @githubber @DVO
+/lib/ @githubber @DVO
+/docs/ @githubber @DVO
+/test/ @githubber @DVO
