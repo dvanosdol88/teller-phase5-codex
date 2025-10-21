@@ -1,5 +1,18 @@
 # Teller Cached Dashboard (Visual Only)
 
+> Working Teller LLC app with fetched and manual storage, before major UI overhaul.
+
+This snapshot is a known-good baseline with:
+- Local manual routes served under `/api/manual/*` (handled before proxy)
+- UI verified: aligned totals, centered equity, smaller Save buttons
+- Test scripts passing for manual summary and gated writes
+
+If you need to restore this state later, create a working-baseline tag:
+```
+git tag -a "working-baseline-$(date +%Y%m%d-%H%M%S)" -m "working baseline - $(date)"
+git push origin --tags
+```
+
 This repo contains a static, visual-only snapshot of the Teller cached dashboard UI.
 
 ## Quick Start - Deploy to Render
