@@ -1347,11 +1347,23 @@ async function saveManualLiability(slug, ids) {
   try {
     const resp = await fetch(`/api/manual/liabilities/${slug}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     if (resp.status === 405) { showToast('Writes disabled by feature flag'); return; }
-    if (!resp.ok) throw new Error('save failed');
+    if (resp.status === 503) { showToast('Manual data store unavailable'); return; }
+    if (!resp.ok) {
+      let msg = 'Save failed';
+      try {
+        const err = await resp.json();
+        if (typeof err?.message === 'string') msg = err.message;
+        else if (typeof err?.reason === 'string') msg = err.reason;
+        else if (typeof err?.error === 'string') msg = err.error;
+      } catch (_) {
+        try { msg = await resp.text(); } catch (_) {}
+      }
+      throw new Error(msg || 'Save failed');
+    }
     showToast('Saved');
     const summary = await BackendAdapter.fetchManualSummary();
     renderManualSummary(summary);
-  } catch (e) { showToast('Save failed'); }
+  } catch (e) { showToast(e?.message || 'Save failed'); }
 }
 
 async function saveManualAsset() {
@@ -1359,11 +1371,23 @@ async function saveManualAsset() {
   try {
     const resp = await fetch('/api/manual/assets/property_672_elm_value', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ valueUsd }) });
     if (resp.status === 405) { showToast('Writes disabled by feature flag'); return; }
-    if (!resp.ok) throw new Error('save failed');
+    if (resp.status === 503) { showToast('Manual data store unavailable'); return; }
+    if (!resp.ok) {
+      let msg = 'Save failed';
+      try {
+        const err = await resp.json();
+        if (typeof err?.message === 'string') msg = err.message;
+        else if (typeof err?.reason === 'string') msg = err.reason;
+        else if (typeof err?.error === 'string') msg = err.error;
+      } catch (_) {
+        try { msg = await resp.text(); } catch (_) {}
+      }
+      throw new Error(msg || 'Save failed');
+    }
     showToast('Saved');
     const summary = await BackendAdapter.fetchManualSummary();
     renderManualSummary(summary);
-  } catch { showToast('Save failed'); }
+  } catch (e) { showToast(e?.message || 'Save failed'); }
 }
 
 document.addEventListener('DOMContentLoaded', () => {

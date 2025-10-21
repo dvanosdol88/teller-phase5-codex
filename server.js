@@ -57,6 +57,11 @@ const FALLBACK_CONFIG = enforceServerGuards(BASE_CONFIG);
 let manualStore = null;
 let manualFields = null;
 let slugManual = null;
+// In-memory fallback for slug-based manual data when DB is unavailable
+const memoryManual = {
+  liabilities: {},
+  asset: { valueUsd: 0, updatedAt: null, updatedBy: null }
+};
 
 function validateConfigPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -474,8 +479,10 @@ const FEATURE_MANUAL_ASSETS = String(process.env.FEATURE_MANUAL_ASSETS || '').to
 // Read summary combining manual + calculated totals
 app.get('/api/manual/summary', async (req, res) => {
   try {
-    const liabilities = slugManual ? await slugManual.getAllLiabilities() : {};
-    const asset = slugManual ? await slugManual.getAssetValue() : { slug: ASSET_SLUG, valueUsd: 0 };
+    const liabilities = slugManual ? await slugManual.getAllLiabilities() : memoryManual.liabilities;
+    const asset = slugManual
+      ? await slugManual.getAssetValue()
+      : { slug: ASSET_SLUG, valueUsd: memoryManual.asset.valueUsd, updatedAt: memoryManual.asset.updatedAt, updatedBy: memoryManual.asset.updatedBy };
     const liabSum = Object.values(liabilities).reduce((acc, l) => acc + (Number(l.outstandingBalanceUsd) || 0), 0);
 
     // Teller balances sum via local dataStore helpers
@@ -513,13 +520,25 @@ app.get('/api/manual/summary', async (req, res) => {
 // Update a liability by slug
 app.put('/api/manual/liabilities/:slug', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_LIAB) return res.status(405).json({ error: 'manual_liabilities_disabled' });
-  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
   try {
     const { slug } = req.params;
     if (!LIABILITY_SLUGS.has(slug)) return res.status(400).json({ error: 'unknown_slug' });
     const { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths, updatedBy } = req.body || {};
-    const result = await slugManual.updateLiability(slug, { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths }, updatedBy || null);
-    res.json({ ok: true, liabilities: result });
+    if (slugManual) {
+      const result = await slugManual.updateLiability(slug, { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths }, updatedBy || null);
+      return res.json({ ok: true, liabilities: result });
+    }
+    // Fallback: in-memory update
+    memoryManual.liabilities[slug] = {
+      loanAmountUsd: Number(loanAmountUsd) || 0,
+      interestRatePct: Number(interestRatePct) || 0,
+      monthlyPaymentUsd: Number(monthlyPaymentUsd) || 0,
+      outstandingBalanceUsd: Number(outstandingBalanceUsd) || 0,
+      termMonths: Number(termMonths) || null,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || null
+    };
+    return res.json({ ok: true, liabilities: memoryManual.liabilities });
   } catch (e) {
     res.status(400).json({ error: 'validation_failed', message: e.message });
   }
@@ -528,11 +547,19 @@ app.put('/api/manual/liabilities/:slug', jsonParser, async (req, res) => {
 // Update the single manual asset value
 app.put('/api/manual/assets/property_672_elm_value', jsonParser, async (req, res) => {
   if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_ASSETS) return res.status(405).json({ error: 'manual_assets_disabled' });
-  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
   try {
     const { valueUsd, updatedBy } = req.body || {};
-    const result = await slugManual.updateAssetValue(valueUsd, updatedBy || null);
-    res.json({ ok: true, asset: result });
+    if (slugManual) {
+      const result = await slugManual.updateAssetValue(valueUsd, updatedBy || null);
+      return res.json({ ok: true, asset: result });
+    }
+    // Fallback: in-memory update
+    memoryManual.asset = {
+      valueUsd: Number(valueUsd) || 0,
+      updatedAt: new Date().toISOString(),
+      updatedBy: updatedBy || null
+    };
+    return res.json({ ok: true, asset: memoryManual.asset });
   } catch (e) {
     res.status(400).json({ error: 'validation_failed', message: e.message });
   }
