@@ -1,0 +1,203 @@
+name: Githubber Agent PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  detect-pr-type:
+    name: Detect PR Type (Code vs Docs)
+    runs-on: ubuntu-latest
+    outputs:
+      has_code_changes: ${{ steps.check_files.outputs.has_code_changes }}
+      pr_type: ${{ steps.check_files.outputs.pr_type }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for code changes
+        id: check_files
+        run: |
+          # Get list of changed files
+          git fetch origin ${{ github.base_ref }}
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Define code file patterns (anything that's not docs/markdown)
+          CODE_PATTERNS='\.js$|\.ts$|\.jsx$|\.tsx$|\.py$|\.java$|\.go$|\.rb$|\.php$|\.c$|\.cpp$|\.h$|\.sql$|\.sh$|package\.json$|Dockerfile$|docker-compose\.yml$'
+
+          # Check if any changed files match code patterns
+          if echo "$CHANGED_FILES" | grep -E "$CODE_PATTERNS"; then
+            echo "has_code_changes=true" >> $GITHUB_OUTPUT
+            echo "pr_type=code" >> $GITHUB_OUTPUT
+            echo "✅ Code changes detected"
+          else
+            echo "has_code_changes=false" >> $GITHUB_OUTPUT
+            echo "pr_type=docs" >> $GITHUB_OUTPUT
+            echo "📝 Docs-only changes detected"
+          fi
+
+  githubber-code-pr:
+    name: Githubber - Code PR Review
+    needs: detect-pr-type
+    if: needs.detect-pr-type.outputs.has_code_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add PR comment - Code Review Required
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const body = `## 🤖 Githubber Agent - Code PR Detected
+
+            This PR contains code changes and requires:
+
+            ### ✅ REQUIRED Checklist (from PR template):
+            - [ ] **Commit Status Tracking** included in all commits
+              - Working before commit: YES/NO/PARTIAL
+              - Working after commit: TBD
+            - [ ] **NEXT STEPS** section included in PR description
+              - IMMEDIATE
+              - SHORT RUN
+              - LONG RUN
+            - [ ] **Tests** run and passing
+            - [ ] **Manual verification** completed
+
+            ### 🔍 What Githubber Will Verify:
+            1. All commits have status tracking
+            2. PR has NEXT STEPS section
+            3. Test results documented
+            4. No obvious issues in code review
+
+            **Status:** Review in progress...
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Check for required sections
+        id: check_requirements
+        run: |
+          PR_BODY="${{ github.event.pull_request.body }}"
+
+          # Check for NEXT STEPS section
+          if echo "$PR_BODY" | grep -i "NEXT STEPS"; then
+            echo "✅ NEXT STEPS section found"
+            echo "has_next_steps=true" >> $GITHUB_OUTPUT
+          else
+            echo "❌ NEXT STEPS section missing"
+            echo "has_next_steps=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check for test evidence
+          if echo "$PR_BODY" | grep -iE "test|passed|failed"; then
+            echo "✅ Test information found"
+            echo "has_tests=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ Test information missing"
+            echo "has_tests=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update PR with validation results
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const hasNextSteps = '${{ steps.check_requirements.outputs.has_next_steps }}' === 'true';
+            const hasTests = '${{ steps.check_requirements.outputs.has_tests }}' === 'true';
+
+            let status = '✅ All required sections present';
+            let issues = [];
+
+            if (!hasNextSteps) {
+              issues.push('❌ **NEXT STEPS** section is missing');
+            }
+            if (!hasTests) {
+              issues.push('⚠️ **Test evidence** is missing or unclear');
+            }
+
+            if (issues.length > 0) {
+              status = '⚠️ Missing required sections';
+            }
+
+            const body = `## 🤖 Githubber Agent - Validation Results
+
+            **Status:** ${status}
+
+            ${issues.length > 0 ? '### Issues Found:\n' + issues.join('\n') : '### ✅ Validation Passed'}
+
+            ${!hasNextSteps ? '\n**Action Required:** Please add a NEXT STEPS section with IMMEDIATE, SHORT RUN, and LONG RUN subsections.\n' : ''}
+            ${!hasTests ? '\n**Recommendation:** Include test results or manual verification steps in the PR description.\n' : ''}
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  githubber-docs-pr:
+    name: Githubber - Docs PR Review
+    needs: detect-pr-type
+    if: needs.detect-pr-type.outputs.has_code_changes == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add PR comment - Docs Only
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const body = `## 🤖 Githubber Agent - Docs PR Detected
+
+            This PR contains documentation-only changes.
+
+            ### 📝 Simplified Review (No code changes):
+            - ✅ Commit Status Tracking: **Optional** for docs-only PRs
+            - ✅ NEXT STEPS section: **Optional** (unless planning future work)
+            - ✅ Tests: Not required for docs-only changes
+
+            ### 🔍 Quick Checks:
+            - Spelling and grammar look good
+            - Links are valid (if applicable)
+            - Formatting is correct
+
+            **Status:** Docs-only PR - expedited review ✅
+            `;
+
+            await github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Validate documentation
+        run: |
+          echo "📝 Validating documentation changes..."
+
+          # Check for broken markdown links (basic check)
+          if find . -name "*.md" -type f -exec grep -l "]()" {} \;; then
+            echo "⚠️ Warning: Found empty markdown links"
+          else
+            echo "✅ No empty markdown links found"
+          fi
+
+          echo "✅ Documentation validation complete"

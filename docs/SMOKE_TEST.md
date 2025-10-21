@@ -22,3 +22,29 @@ Notes
 - The current passcode is 2123 (defined in visual-only/passcode-gate.js).
 - To bypass the gate entirely (not used by the smoke tests), set localStorage.passcodeBypass = '1' or add ?bypass=1 to the URL.
 
+---
+
+# Manual Liabilities/Assets Smoke
+
+Overview
+- Validates `/api/manual/summary` and gated PUTs for liabilities/assets.
+
+How to Run
+```bash
+BASE_URL=http://127.0.0.1:3000 bash test/manual-liabilities-assets-test.sh
+BASE_URL=http://127.0.0.1:3000 bash test/ui-smoke-manual-summary.sh
+```
+
+Expected (flags off)
+- GET summary → 200
+- PUT liabilities/assets → 405 (gated)
+
+Enable writes (optional)
+```bash
+export FEATURE_MANUAL_DATA=true
+export FEATURE_MANUAL_LIABILITIES=true
+export FEATURE_MANUAL_ASSETS=true
+node server.js
+```
+
+Then PUTs should return 200 and summary reflects updates.
