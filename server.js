@@ -467,6 +467,78 @@ app.put('/api/db/accounts/:accountId/manual/mortgage/:field', jsonParser, async 
     res.status(400).json(payload);
   }
 });
+// ---------------- Slug-based Manual Endpoints & Summary -----------------
+const FEATURE_MANUAL_LIAB = String(process.env.FEATURE_MANUAL_LIABILITIES || '').toLowerCase() === 'true';
+const FEATURE_MANUAL_ASSETS = String(process.env.FEATURE_MANUAL_ASSETS || '').toLowerCase() === 'true';
+
+// Read summary combining manual + calculated totals
+app.get('/api/manual/summary', async (req, res) => {
+  try {
+    const liabilities = slugManual ? await slugManual.getAllLiabilities() : {};
+    const asset = slugManual ? await slugManual.getAssetValue() : { slug: ASSET_SLUG, valueUsd: 0 };
+    const liabSum = Object.values(liabilities).reduce((acc, l) => acc + (Number(l.outstandingBalanceUsd) || 0), 0);
+
+    // Teller balances sum via local dataStore helpers
+    const accounts = getAccounts();
+    const tellerTotal = accounts.reduce((acc, a) => {
+      const bal = getBalanceByAccountId(a.id);
+      if (!bal) return acc;
+      // Support both shapes: { available } or { balance: { available } }
+      const available = (bal && typeof bal.available === 'number')
+        ? bal.available
+        : (bal.balance && typeof bal.balance.available === 'number')
+          ? bal.balance.available
+          : 0;
+      return acc + available;
+    }, 0);
+
+    const manualAsset = Number(asset.valueUsd) || 0;
+    const totalAssets = tellerTotal + manualAsset;
+    const totalLiabilities = liabSum;
+    const totalEquity = totalAssets - totalLiabilities;
+
+    return res.json({
+      manual: {
+        liabilities,
+        assets: { [ASSET_SLUG]: { valueUsd: asset.valueUsd, updatedAt: asset.updatedAt, updatedBy: asset.updatedBy } }
+      },
+      calculated: { totalAssets, totalLiabilities, totalEquity }
+    });
+  } catch (e) {
+    console.error('[manual-summary] error', e.message);
+    res.status(500).json({ error: 'failed_manual_summary' });
+  }
+});
+
+// Update a liability by slug
+app.put('/api/manual/liabilities/:slug', jsonParser, async (req, res) => {
+  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_LIAB) return res.status(405).json({ error: 'manual_liabilities_disabled' });
+  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
+  try {
+    const { slug } = req.params;
+    if (!LIABILITY_SLUGS.has(slug)) return res.status(400).json({ error: 'unknown_slug' });
+    const { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths, updatedBy } = req.body || {};
+    const result = await slugManual.updateLiability(slug, { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths }, updatedBy || null);
+    res.json({ ok: true, liabilities: result });
+  } catch (e) {
+    res.status(400).json({ error: 'validation_failed', message: e.message });
+  }
+});
+
+// Update the single manual asset value
+app.put('/api/manual/assets/property_672_elm_value', jsonParser, async (req, res) => {
+  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_ASSETS) return res.status(405).json({ error: 'manual_assets_disabled' });
+  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
+  try {
+    const { valueUsd, updatedBy } = req.body || {};
+    const result = await slugManual.updateAssetValue(valueUsd, updatedBy || null);
+    res.json({ ok: true, asset: result });
+  } catch (e) {
+    res.status(400).json({ error: 'validation_failed', message: e.message });
+  }
+});
+
+// Backend proxy (registered AFTER local manual routes)
 app.use('/api', createProxyMiddleware({
   target: BACKEND_URL,
   changeOrigin: true,
@@ -549,74 +621,3 @@ async function cleanupAndExit(signal) {
 
 process.on('SIGINT', () => cleanupAndExit('SIGINT'));
 process.on('SIGTERM', () => cleanupAndExit('SIGTERM'));
-
-// ---------------- Slug-based Manual Endpoints & Summary -----------------
-const FEATURE_MANUAL_LIAB = String(process.env.FEATURE_MANUAL_LIABILITIES || '').toLowerCase() === 'true';
-const FEATURE_MANUAL_ASSETS = String(process.env.FEATURE_MANUAL_ASSETS || '').toLowerCase() === 'true';
-
-// Read summary combining manual + calculated totals
-app.get('/api/manual/summary', async (req, res) => {
-  try {
-    const liabilities = slugManual ? await slugManual.getAllLiabilities() : {};
-    const asset = slugManual ? await slugManual.getAssetValue() : { slug: ASSET_SLUG, valueUsd: 0 };
-    const liabSum = Object.values(liabilities).reduce((acc, l) => acc + (Number(l.outstandingBalanceUsd) || 0), 0);
-
-    // Teller balances sum via local dataStore helpers
-    const accounts = getAccounts();
-    const tellerTotal = accounts.reduce((acc, a) => {
-      const bal = getBalanceByAccountId(a.id);
-      if (!bal) return acc;
-      // Support both shapes: { available } or { balance: { available } }
-      const available = (bal && typeof bal.available === 'number')
-        ? bal.available
-        : (bal.balance && typeof bal.balance.available === 'number')
-          ? bal.balance.available
-          : 0;
-      return acc + available;
-    }, 0);
-
-    const manualAsset = Number(asset.valueUsd) || 0;
-    const totalAssets = tellerTotal + manualAsset;
-    const totalLiabilities = liabSum;
-    const totalEquity = totalAssets - totalLiabilities;
-
-    return res.json({
-      manual: {
-        liabilities,
-        assets: { [ASSET_SLUG]: { valueUsd: asset.valueUsd, updatedAt: asset.updatedAt, updatedBy: asset.updatedBy } }
-      },
-      calculated: { totalAssets, totalLiabilities, totalEquity }
-    });
-  } catch (e) {
-    console.error('[manual-summary] error', e.message);
-    res.status(500).json({ error: 'failed_manual_summary' });
-  }
-});
-
-// Update a liability by slug
-app.put('/api/manual/liabilities/:slug', jsonParser, async (req, res) => {
-  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_LIAB) return res.status(405).json({ error: 'manual_liabilities_disabled' });
-  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
-  try {
-    const { slug } = req.params;
-    if (!LIABILITY_SLUGS.has(slug)) return res.status(400).json({ error: 'unknown_slug' });
-    const { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths, updatedBy } = req.body || {};
-    const result = await slugManual.updateLiability(slug, { loanAmountUsd, interestRatePct, monthlyPaymentUsd, outstandingBalanceUsd, termMonths }, updatedBy || null);
-    res.json({ ok: true, liabilities: result });
-  } catch (e) {
-    res.status(400).json({ error: 'validation_failed', message: e.message });
-  }
-});
-
-// Update the single manual asset value
-app.put('/api/manual/assets/property_672_elm_value', jsonParser, async (req, res) => {
-  if (!FEATURE_MANUAL_DATA || !FEATURE_MANUAL_ASSETS) return res.status(405).json({ error: 'manual_assets_disabled' });
-  if (!slugManual) return res.status(503).json({ error: 'manual_store_unavailable' });
-  try {
-    const { valueUsd, updatedBy } = req.body || {};
-    const result = await slugManual.updateAssetValue(valueUsd, updatedBy || null);
-    res.json({ ok: true, asset: result });
-  } catch (e) {
-    res.status(400).json({ error: 'validation_failed', message: e.message });
-  }
-});
