@@ -104,6 +104,10 @@
             opacity: 0;
             pointer-events: none;
         }
+        /* UI-only: hide numeric input spinners while keeping type=number */
+        input[type=number]::-webkit-outer-spin-button,
+        input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; appearance: textfield; }
     </style>
 </head>
 <body class="antialiased">
@@ -186,8 +190,12 @@
                                     <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">672 Elm Value (USD)</label>
                                     <div class="flex space-x-2">
                                         <input id="asset-672-elm" type="number" step="0.01" min="0" placeholder="0.00" class="flex-1 border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
-                                        <button id="save-asset-672-elm" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button>
+                                        <button id="save-asset-672-elm" class="bg-slate-600 text-white text-sm px-3 py-1.5 rounded-md hover:bg-slate-700">Save</button>
                                     </div>
+                                </div>
+                                <!-- Total Assets (aligned under Assets column) -->
+                                <div class="mt-4 p-3 rounded-lg text-center" style="background-color: var(--bg-tertiary);">
+                                    <span id="total-assets-label" class="text-sm font-medium" style="color: var(--text-secondary);">Total Assets: $0.00</span>
                                 </div>
                             </div>
                             <!-- Liabilities Column -->
@@ -204,7 +212,7 @@
                                             <input id="heloc-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
                                         </div>
                                         <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
-                                        <div class="mt-2 text-right"><button id="save-heloc" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                        <div class="mt-2 text-right"><button id="save-heloc" class="bg-slate-600 text-white text-sm px-3 py-1.5 rounded-md hover:bg-slate-700">Save</button></div>
                                     </div>
                                     <div class="p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
                                         <div class="font-semibold mb-2">Original Mortgage Loan (672)</div>
@@ -215,7 +223,7 @@
                                             <input id="m672-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
                                         </div>
                                         <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
-                                        <div class="mt-2 text-right"><button id="save-m672" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                        <div class="mt-2 text-right"><button id="save-m672" class="bg-slate-600 text-white text-sm px-3 py-1.5 rounded-md hover:bg-slate-700">Save</button></div>
                                     </div>
                                     <div class="p-4 rounded-lg" style="background-color: var(--bg-tertiary);">
                                         <div class="font-semibold mb-2">Roof Loan</div>
@@ -226,8 +234,12 @@
                                             <input id="roof-outstanding" type="number" step="0.01" min="0" placeholder="Outstanding Balance (USD)" class="border rounded-lg p-2" style="background-color: var(--bg-secondary); border-color: var(--border-color); color: var(--text-primary);">
                                         </div>
                                         <div class="text-sm mt-2" style="color: var(--text-secondary);">Due Date | 25th of month</div>
-                                        <div class="mt-2 text-right"><button id="save-roof" class="bg-indigo-600 text-white px-4 py-2 rounded-lg">Save</button></div>
+                                        <div class="mt-2 text-right"><button id="save-roof" class="bg-slate-600 text-white text-sm px-3 py-1.5 rounded-md hover:bg-slate-700">Save</button></div>
                                     </div>
+                                </div>
+                                <!-- Total Liabilities (aligned under Liabilities column) -->
+                                <div class="mt-4 p-3 rounded-lg text-center" style="background-color: var(--bg-tertiary);">
+                                    <span id="total-liabilities-label" class="text-sm font-medium" style="color: var(--text-secondary);">Total Liabilities: $0.00</span>
                                 </div>
                             </div>
                         </div>
@@ -235,9 +247,6 @@
                             <div id="equity-card" class="bg-green-100 p-4 rounded-lg max-w-xs mx-auto">
                                 <span class="font-semibold text-slate-800">Total Equity</span>
                                 <p id="total-equity-balance" class="font-bold text-green-800 text-2xl">$0.00</p>
-                                <div class="mt-2 text-sm" style="color: var(--text-secondary);">
-                                  <span id="total-assets-label">Total Assets: $0.00</span> · <span id="total-liabilities-label">Total Liabilities: $0.00</span>
-                                </div>
                             </div>
                             <p id="data-timestamp" class="text-xs text-slate-500 mt-3" style="color: var(--text-secondary); display: none;"></p>
                         </div>
@@ -290,9 +299,9 @@
                 </div>
             </div>
             <div class="p-6 bg-slate-50 border-t border-slate-200 rounded-b-2xl flex justify-end space-x-3" style="background-color: var(--bg-tertiary); border-color: var(--border-color);">
-                <button class="modal-cancel bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Cancel</button>
-                <button class="modal-clear bg-slate-200 text-slate-700 font-semibold py-2 px-4 rounded-lg hover:bg-slate-300 transition-colors">Clear</button>
-                <button class="modal-save bg-indigo-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">Save</button>
+                <button class="modal-cancel bg-slate-200 text-slate-700 font-medium py-1.5 px-3 rounded-md hover:bg-slate-300 transition-colors text-sm">Cancel</button>
+                <button class="modal-clear bg-slate-200 text-slate-700 font-medium py-1.5 px-3 rounded-md hover:bg-slate-300 transition-colors text-sm">Clear</button>
+                <button class="modal-save bg-slate-600 text-white font-medium py-1.5 px-3 rounded-md hover:bg-slate-700 transition-colors text-sm">Save</button>
             </div>
         </div>
     </div>
@@ -304,5 +313,7 @@
     <script src="https://cdn.teller.io/connect/connect.js"></script>
     <!-- Cache-bust app script to ensure latest JS is loaded -->
     <script src="./index.js?v=20251019" defer></script>
+    <!-- Lightweight passcode gate (no boot coupling) -->
+    <script src="./passcode-gate.js" defer></script>
 </body>
 </html>

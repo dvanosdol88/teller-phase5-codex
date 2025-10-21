@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Passcode Gate Smoke Test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --bg-primary: #F8FAFC;
+        --bg-secondary: #FFFFFF;
+        --text-primary: #334155;
+        --text-secondary: #64748B;
+        --border-color: #E2E8F0;
+      }
+      body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); }
+      .container { max-width: 720px; margin: 40px auto; padding: 0 16px; }
+      .card { background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; }
+      .muted { color: var(--text-secondary); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Passcode Gate Smoke Test</h1>
+      <p class="muted">This page runs a few basic checks against the dynamic passcode modal.</p>
+      <div id="smoke-results" class="card" aria-live="polite">Running…</div>
+
+      <div class="card" style="margin-top: 16px;">
+        <h2>Underlying Content</h2>
+        <p class="muted">This content should be visible but blocked by the overlay until the correct passcode is entered.</p>
+        <button id="underlying-button">Underlying Button</button>
+        <p id="underlying-clicks" class="muted">Clicks: 0</p>
+      </div>
+    </div>
+
+    <script>
+      // Simple underlying click counter to confirm page remains interactive after unlock
+      (function(){
+        let clicks = 0;
+        const btn = document.getElementById('underlying-button');
+        const label = document.getElementById('underlying-clicks');
+        if (btn && label) {
+          btn.addEventListener('click', function(){ clicks += 1; label.textContent = 'Clicks: ' + clicks; });
+        }
+      })();
+    </script>
+
+    <!-- App gate under test -->
+    <script src="./passcode-gate.js" defer></script>
+    <!-- Smoke runner -->
+    <script src="./passcode-gate.smoke.js" defer></script>
+  </body>
+  </html>
+
