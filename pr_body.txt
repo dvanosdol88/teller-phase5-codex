@@ -1,0 +1,29 @@
+﻿This PR adds manual liabilities/assets support with calculated totals.
+
+What
+- SQL migration: manual_liability + manual_asset (with seeds)
+- Store: slug-based manual store (no account linkage)
+- Server: new endpoints and summary totals
+  - GET /api/manual/summary
+  - PUT /api/manual/liabilities/:slug
+  - PUT /api/manual/assets/property_672_elm_value
+- Tests: manual-liabilities-assets-test.sh (read summary + write gating)
+
+Design
+- Liabilities slugs: heloc_loan, original_mortgage_loan_672, roof_loan
+- Asset slug: property_672_elm_value
+- TotalLiabilities = sum(outstanding_balance_usd) (null->0)
+- TotalAssets = sum(Teller balances) + manual asset (null->0)
+- TotalEquity = assets - liabilities
+
+Flags
+- Reads always enabled.
+- Writes require: FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_LIABILITIES/FEATURE_MANUAL_ASSETS=true.
+
+How to test locally
+- Start server with DATABASE_URL and FEATURE_MANUAL_DATA=true
+- Read-only: BASE_URL=http://127.0.0.1:3000 bash test/manual-liabilities-assets-test.sh
+- Writes: also set FEATURE_MANUAL_LIABILITIES=true FEATURE_MANUAL_ASSETS=true and curl PUT endpoints.
+
+Next
+- UI PR to expose fields under Liabilities and Assets with static "Due Date | 25th of month" labels and totals.

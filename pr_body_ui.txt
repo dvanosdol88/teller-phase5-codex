@@ -1,0 +1,19 @@
+﻿UI wiring for manual liabilities/assets with totals, smoke test, and Postman collection.
+
+What
+- visual-only/index.html: inputs for 672 Elm Value (USD); HELOC, Original Mortgage Loan (672), Roof Loan cards; static "Due Date | 25th of month" labels; totals labels under Total Equity.
+- visual-only/index.js: fetch/render /api/manual/summary; wire Save buttons for asset and liabilities; re-fetch summary; improved diagnostics toast; tolerate 404 balances as zero.
+- server.js: totals aggregator accepts both available and balance.available shapes.
+- test/ui-smoke-manual-summary.sh: read-only summary + gated write attempts (treats 405 as OK gating).
+- manual-liabilities-assets.postman_collection.json: ready-to-import Postman collection at repo root.
+
+Notes
+- Writes require flags: FEATURE_MANUAL_DATA=true and FEATURE_MANUAL_LIABILITIES/FEATURE_MANUAL_ASSETS=true on the server.
+- Reads are safe with no flags.
+
+How to test
+- Smoke: BASE_URL=http://127.0.0.1:3000 bash test/ui-smoke-manual-summary.sh
+- Postman: Import manual-liabilities-assets.postman_collection.json, create env with baseUrl and variables (see MANUAL_LIABILITIES_ASSETS_TESTING.md), run GET Summary -> PUTs (expect 405 if flags disabled) -> GET Summary verify totals.
+
+Dependency
+- This UI builds on the backend slice in PR #10 (manual liabilities/assets tables + endpoints + totals).

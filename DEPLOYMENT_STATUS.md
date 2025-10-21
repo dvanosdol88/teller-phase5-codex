@@ -121,7 +121,7 @@ curl -sS https://teller-phase5-codex-1.onrender.com/api/db/accounts/acc_test/man
 
 ### Expected Results:
 
-**1. /api/config** ✅ (already working)
+**1. /api/config** ✅ (working)
 ```json
 {
   "apiBaseUrl": "/api",
@@ -130,7 +130,7 @@ curl -sS https://teller-phase5-codex-1.onrender.com/api/db/accounts/acc_test/man
 }
 ```
 
-**2. /api/healthz** (should show):
+**2. /api/healthz** (example):
 ```json
 {
   "ok": true,
@@ -144,12 +144,15 @@ curl -sS https://teller-phase5-codex-1.onrender.com/api/db/accounts/acc_test/man
 }
 ```
 
-**3. Manual data GET** (should show):
+**3. Manual summary (local manual routes)**
+```bash
+curl -sS https://<host>/api/manual/summary | jq .
+```
+Expected 200 with fields:
 ```json
 {
-  "account_id": "acc_test",
-  "rent_roll": null,
-  "updated_at": null
+  "manual": { "liabilities": { ... }, "assets": { "property_672_elm_value": { "valueUsd": 0 } } },
+  "calculated": { "totalAssets": 0, "totalLiabilities": 0, "totalEquity": 0 }
 }
 ```
 
@@ -192,7 +195,7 @@ npm run test:verbose
 | **Service Health** | ✅ UP | Service running, responding to requests |
 | **Configuration** | ✅ Working | Correct flags returned |
 | **Proxy** | ✅ Working | Backend proxy functional |
-| **Manual Routes** | ❌ Missing | Routes not deployed yet |
+| **Manual Routes** | ✅ Working | Local routes defined before proxy |
 | **Database** | ⚠️ Unknown | Can't test until routes deployed |
 | **Automated Tests** | ✅ Created | Test suite ready to run |
 
@@ -202,9 +205,9 @@ npm run test:verbose
 
 1. ✅ **Created automated test suite** (done)
 2. ✅ **Created verification script** (done)
-3. ⚠️ **Redeploy service with latest code** (pending)
-4. ⏳ **Run verification script** (after redeploy)
-5. ⏳ **Run full test suite** (after verification passes)
+3. ✅ **Route order fixed** (manual before proxy)
+4. ✅ **Run verification script** (passed)
+5. ✅ **Run focused/manual smoke tests** (passed)
 
 ---
 
@@ -235,7 +238,7 @@ This deployment issue was discovered automatically by an agent running the test 
 
 ## Resources
 
-- **Verification Script:** `test/verify-deployment.sh`
-- **Test Suite:** `test/api-integration-test.sh`
-- **Test Documentation:** `test/README.md`
-- **Server Code:** `server.js` (lines 56-93 for manual data routes)
+- Verification Script: `test/verify-deployment.sh`
+- Test Suites: `test/api-integration-test.sh`, `test/manual-liabilities-assets-test.sh`, `test/ui-smoke-manual-summary.sh`
+- Test Documentation: `test/README.md`, `test/TEST_GUIDE.md`
+- Server Code: `server.js` (manual routes are defined before the `/api` proxy)

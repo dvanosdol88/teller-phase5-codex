@@ -8,7 +8,7 @@ Confirmed backend contract (teller-codex10-9A)
   - users, accounts, balances, transactions; User 1—N Accounts; Account 1—1 Balance; Account 1—N Transactions.
 - Config:
   - GET /api/config -> { applicationId, environment, apiBaseUrl } (no FEATURE_USE_BACKEND yet)
-- Cached reads:
+- Cached reads (proxied via this server when FEATURE_STATIC_DB=false):
   - GET /api/db/accounts -> { accounts: [ { id, name, institution, last_four, type, subtype, currency } ] }
   - GET /api/db/accounts/{id}/balances -> { account_id, cached_at, balance: <raw balance JSON> }
   - GET /api/db/accounts/{id}/transactions?limit=10 -> { account_id, transactions: [<raw txn JSON>], cached_at }
@@ -36,6 +36,7 @@ Phased rollout plan
   - When ready, expose FEATURE_USE_BACKEND via /api/config (backend change is optional and additive).
   - With FEATURE_USE_BACKEND=true: UI loads cached accounts, balances, transactions.
   - Backend unreachable: UI silently falls back to mocks; no console errors.
+  - Manual endpoints are served locally under `/api/manual/*` and are never proxied; route order enforces this.
 - Phase 5: Optional live refresh
   - Enable live endpoints only after cached reads are stable.
 - Phase 6: Backend migrations and env
@@ -68,8 +69,11 @@ Notes
 
 ### API Behavior
 
-- Allowed write path: `GET/PUT /api/db/{account_id}/manual/{field}` only.
-- No write endpoints for `/balances` or `/transactions`.
+- Allowed write paths (manual only):
+  - `PUT /api/manual/liabilities/:slug` (flags required)
+  - `PUT /api/manual/assets/property_672_elm_value` (flags required)
+  - Reads: `GET /api/manual/summary` always available (returns defaults when store disabled)
+- No write endpoints for `/balances` or `/transactions` (405).
 - Error codes:
   - `400` invalid manual input (returns `{ error, reason, field }`).
   - `405` disallowed method on teller/computed endpoints.
@@ -77,25 +81,25 @@ Notes
 
 ### Examples
 
-- PUT manual rent roll
+Examples (manual slug endpoints)
 ```
-PUT /api/db/accounts/acc_1/manual/rent_roll
-{ "rent_roll": 2500.00, "updated_by": "david" }
+PUT /api/manual/liabilities/heloc_loan
+{ "outstandingBalanceUsd": 48000, "interestRatePct": 6.5, "updatedBy": "david" }
 
 200 OK
-{ "account_id": "acc_1", "rent_roll": 2500.0, "updated_at": "2025-10-19T12:34:56.789Z" }
+{ "ok": true, "liabilities": { "heloc_loan": { ... } } }
 ```
 
-- Error: invalid input
+Error: invalid input
 ```
-PUT /api/db/accounts/acc_1/manual/rent_roll
-{ "rent_roll": -1 }
+PUT /api/manual/assets/property_672_elm_value
+{ "valueUsd": -1 }
 
 400 Bad Request
-{ "error": "validation_failed", "reason": "rent_roll must be non-negative", "field": "rent_roll" }
+{ "error": "validation_failed", "message": "valueUsd must be non-negative" }
 ```
 
-- Error: disallowed write
+Error: disallowed write
 ```
 PUT /api/db/accounts/acc_1/balances
 
@@ -103,11 +107,4 @@ PUT /api/db/accounts/acc_1/balances
 { "error": "method_not_allowed" }
 ```
 
-- Error: foreign key violation (if enforced)
-```
-PUT /api/db/accounts/unknown/manual/rent_roll
-{ "rent_roll": 2500 }
-
-424 Failed Dependency
-{ "error": "Failed to persist manual data", "code": "FK_VIOLATION", "hint": "Seed this account_id in the referenced accounts table or relax the FK constraint" }
-```
+Note: Slug-based manual tables are account-agnostic; FK constraints apply only to the rent_roll demo endpoint, which remains optional.

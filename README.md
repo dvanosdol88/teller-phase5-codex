@@ -128,11 +128,13 @@ See `test/README.md` for details.
 
 ## Documentation
 - Integration: docs/INTEGRATION.md
+- Environment Setup: docs/ENV_SETUP.md
 - Validation: docs/VALIDATION.md
 - Troubleshooting: docs/TROUBLESHOOTING.md
 - Deployment options: docs/DEPLOYMENT_CHOICES.md
  - API Spec: docs/ENDPOINTS.md
 - **Testing**: test/README.md
+- Manual rollout: docs/manual-liabilities-rollout.md
 
 
 # Teller Cached Dashboard — Visual-Only Snapshot
