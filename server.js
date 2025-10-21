@@ -1,3 +1,6 @@
+// Load env from .env if available (non-fatal if dotenv not installed)
+try { require('dotenv').config(); } catch (_) {}
+
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
@@ -62,6 +65,39 @@ const memoryManual = {
   liabilities: {},
   asset: { valueUsd: 0, updatedAt: null, updatedBy: null }
 };
+
+async function computeManualSummaryForHealth() {
+  try {
+    // Use same logic as /api/manual/summary but compact
+    const liabilities = slugManual ? await slugManual.getAllLiabilities() : memoryManual.liabilities;
+    const asset = slugManual
+      ? await slugManual.getAssetValue()
+      : { valueUsd: memoryManual.asset.valueUsd, updatedAt: memoryManual.asset.updatedAt };
+
+    const liabSum = Object.values(liabilities || {}).reduce((acc, l) => acc + (Number(l.outstandingBalanceUsd) || 0), 0);
+
+    const accounts = getAccounts();
+    const tellerTotal = accounts.reduce((acc, a) => {
+      const bal = getBalanceByAccountId(a.id);
+      if (!bal) return acc;
+      const available = (bal && typeof bal.available === 'number')
+        ? bal.available
+        : (bal.balance && typeof bal.balance.available === 'number')
+          ? bal.balance.available
+          : 0;
+      return acc + available;
+    }, 0);
+
+    const manualAsset = Number(asset.valueUsd) || 0;
+    const totalAssets = tellerTotal + manualAsset;
+    const totalLiabilities = liabSum;
+    const totalEquity = totalAssets - totalLiabilities;
+
+    return { ok: true, totals: { totalAssets, totalLiabilities, totalEquity } };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
 
 function validateConfigPayload(payload) {
   if (!payload || typeof payload !== 'object') {
@@ -309,6 +345,7 @@ app.get('/api/healthz', async (req, res) => {
       readonly: MANUAL_DATA_READONLY,
       dryRun: MANUAL_DATA_DRY_RUN,
       connected: null,
+      summary: null,
     }
   };
   if (FEATURE_MANUAL_DATA && manualStore) {
@@ -320,6 +357,11 @@ app.get('/api/healthz', async (req, res) => {
       result.manualData.connected = false;
       result.manualData.error = e.message;
     }
+  }
+  // Try to compute summary if features enabled (does not fail health)
+  if (FEATURE_MANUAL_DATA) {
+    const summary = await computeManualSummaryForHealth();
+    result.manualData.summary = summary;
   }
   res.json(result);
 });
@@ -624,9 +666,21 @@ app.listen(PORT, '0.0.0.0', () => {
 });
 
 // Initialize optional resources, then log ready
-setupManualDataStore().catch((e) => {
-  console.error('[manual-data] initialization failed:', e.message);
-});
+setupManualDataStore()
+  .then(async () => {
+    // DB readiness log (non-fatal)
+    if (FEATURE_MANUAL_DATA) {
+      const health = await computeManualSummaryForHealth();
+      if (health.ok) {
+        console.log('[manual-data] readiness totals:', health.totals);
+      } else {
+        console.warn('[manual-data] readiness summary failed:', health.error);
+      }
+    }
+  })
+  .catch((e) => {
+    console.error('[manual-data] initialization failed:', e.message);
+  });
 
 async function cleanupAndExit(signal) {
   try {

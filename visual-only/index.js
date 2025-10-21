@@ -542,6 +542,7 @@ const BackendAdapter = (() => {
     fetchAccounts,
     fetchCachedBalance,
     fetchManualData,
+    fetchManualSummary,
     saveManualData: (accountId, rentRoll) => persistManualData(accountId, rentRoll),
     clearManualData: (accountId) => persistManualData(accountId, null),
     getDiagnostics,
