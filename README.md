@@ -13,7 +13,9 @@ git tag -a "working-baseline-$(date +%Y%m%d-%H%M%S)" -m "working baseline - $(da
 git push origin --tags
 ```
 
-This repo contains a static, visual-only snapshot of the Teller cached dashboard UI.
+This repo can serve either:
+- The built React SPA from `ai-studio-app/dist` if present (recommended), or
+- The legacy static UI under `visual-only/` as a fallback.
 
 ## Quick Start - Deploy to Render
 
@@ -24,15 +26,22 @@ This repo contains a static, visual-only snapshot of the Teller cached dashboard
 2. Connect repo: `dvanosdol88/teller10-18-devinUI`
 3. Select branch: `devin/1760795822-tailwind-dashboard-ui`
 4. Configure:
-   - **Build Command**: `npm install`
+   - **Build Command**:
+     - `npm install && npm --prefix ai-studio-app ci && npm --prefix ai-studio-app run build`
    - **Start Command**: `node server.js`
-   - **Environment Variable**: `BACKEND_URL=https://teller10-15a.onrender.com`
+   - **Environment Variables**:
+     - `BACKEND_URL=https://teller-phase5-codex-1.onrender.com`
+     - `VITE_API_BASE_URL=/api`
 5. Deploy and verify at your Render URL
 
 ### Local Development
 ```bash
+# build SPA (optional but recommended)
 npm install
-BACKEND_URL=https://teller10-15a.onrender.com npm start
+pushd ai-studio-app && npm ci && npm run build && popd
+
+# run server (serves ai-studio-app/dist when present)
+BACKEND_URL=https://teller-phase5-codex-1.onrender.com VITE_API_BASE_URL=/api node server.js
 # Visit http://localhost:3000
 ```
 

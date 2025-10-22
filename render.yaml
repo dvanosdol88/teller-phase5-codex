@@ -3,12 +3,18 @@ services:
     name: teller-phase5-codex-1
     repo: https://github.com/dvanosdol88/teller-phase5-codex
     branch: main
-    buildCommand: npm install
+    buildCommand: |
+      npm install
+      # Build React app if present
+      if [ -d "ai-studio-app" ]; then
+        npm --prefix ai-studio-app ci
+        npm --prefix ai-studio-app run build
+      fi
     startCommand: node server.js
     plan: starter
     envVars:
       - key: BACKEND_URL
-        value: https://teller10-15a.onrender.com
+        value: https://teller-phase5-codex-1.onrender.com
       - key: FEATURE_MANUAL_DATA
         value: true
       - key: DATABASE_URL
@@ -21,3 +27,5 @@ services:
         value: "false"
       - key: MANUAL_DATA_DRY_RUN
         value: "false"
+      - key: VITE_API_BASE_URL
+        value: /api

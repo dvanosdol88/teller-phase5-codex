@@ -4,6 +4,7 @@ try { require('dotenv').config(); } catch (_) {}
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const path = require('path');
+const fs = require('fs');
 const { getAccounts, getAccountById, getBalanceByAccountId, getTransactionsByAccountId } = require('./lib/dataStore');
 const { PgManualDataStore } = require('./lib/pgManualDataStore');
 const { ManualFieldsStore } = require('./lib/manualFieldsStore');
@@ -11,7 +12,7 @@ const { SlugManualStore, LIABILITY_SLUGS, ASSET_SLUG } = require('./lib/slugManu
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BACKEND_URL = process.env.BACKEND_URL || 'https://teller10-15a.onrender.com';
+const BACKEND_URL = process.env.BACKEND_URL || 'https://teller-phase5-codex-1.onrender.com';
 const FEATURE_MANUAL_DATA = String(process.env.FEATURE_MANUAL_DATA || '').toLowerCase() === 'true';
 const FEATURE_STATIC_DB = String(process.env.FEATURE_STATIC_DB || '').toLowerCase() === 'true';
 const MANUAL_DATA_READONLY = String(process.env.MANUAL_DATA_READONLY || '').toLowerCase() === 'true';
@@ -653,10 +654,16 @@ app.use('/api', createProxyMiddleware({
   }
 }));
 
-app.use(express.static(path.join(__dirname, 'visual-only')));
+// Prefer serving the built React app if present; fallback to visual-only
+const DIST_DIR = path.join(__dirname, 'ai-studio-app', 'dist');
+const VISUAL_DIR = path.join(__dirname, 'visual-only');
+const STATIC_ROOT = fs.existsSync(path.join(DIST_DIR, 'index.html')) ? DIST_DIR : VISUAL_DIR;
+
+app.use(express.static(STATIC_ROOT));
 
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'visual-only', 'index.html'));
+  const indexPath = path.join(STATIC_ROOT, 'index.html');
+  res.sendFile(indexPath);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
